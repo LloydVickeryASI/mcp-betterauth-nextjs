@@ -36,13 +36,16 @@ export default function SignIn() {
   };
 
   const handleMicrosoftSignIn = async () => {
-    // For MCP OAuth flow, we need to handle social sign-in differently
-    // We'll use Better Auth's social sign-in but preserve the MCP OAuth state
+    // Store MCP OAuth parameters in session storage before redirecting
     const mcpParams = searchParams.toString();
+    if (mcpParams) {
+      sessionStorage.setItem('mcp-oauth-params', mcpParams);
+    }
     
+    // Use Better Auth's social sign-in with a callback that preserves MCP flow
     await authClient.signIn.social({
       provider: "microsoft",
-      callbackURL: mcpParams ? `/api/auth/mcp/authorize?${mcpParams}` : "/",
+      callbackURL: "/sign-in/callback",
     });
   };
 
