@@ -16,13 +16,13 @@ const handler = withMcpAuth(auth, (req, session) =>
       );
       
       server.tool(
-        "get_user_info",
-        "Get current user information",
+        "get_auth_status",
+        "Get authentication status",
         {},
         async () => ({
           content: [{
             type: "text",
-            text: `Current user: ${session?.sub || 'Unknown'}`
+            text: "Authenticated via Better Auth MCP"
           }],
         }),
       );
