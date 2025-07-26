@@ -1,10 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { createAuthClient } from "better-auth/react";
+
+const authClient = createAuthClient({
+  baseURL: process.env.NEXT_PUBLIC_AUTH_URL || "http://localhost:3000"
+});
 
 export default function SignIn() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const searchParams = useSearchParams();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -18,14 +25,54 @@ export default function SignIn() {
     });
 
     if (response.ok) {
-      window.location.href = '/';
+      // For MCP OAuth flow, we need to complete the authorization
+      const mcpParams = searchParams.toString();
+      if (mcpParams) {
+        window.location.href = `/api/auth/mcp/authorize?${mcpParams}`;
+      } else {
+        window.location.href = '/';
+      }
     }
+  };
+
+  const handleMicrosoftSignIn = async () => {
+    // For MCP OAuth flow, we need to handle social sign-in differently
+    // We'll use Better Auth's social sign-in but preserve the MCP OAuth state
+    const mcpParams = searchParams.toString();
+    
+    await authClient.signIn.social({
+      provider: "microsoft",
+      callbackURL: mcpParams ? `/api/auth/mcp/authorize?${mcpParams}` : "/",
+    });
   };
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center p-24">
       <div className="w-full max-w-md">
         <h1 className="text-2xl font-bold text-center mb-8">Sign In</h1>
+        
+        <button
+          onClick={handleMicrosoftSignIn}
+          className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 mb-6"
+        >
+          <svg className="w-5 h-5" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="1" y="1" width="9" height="9" fill="#F25022"/>
+            <rect x="11" y="1" width="9" height="9" fill="#00A4EF"/>
+            <rect x="1" y="11" width="9" height="9" fill="#7FBA00"/>
+            <rect x="11" y="11" width="9" height="9" fill="#FFB900"/>
+          </svg>
+          Continue with Microsoft
+        </button>
+
+        <div className="relative my-6">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-300"></div>
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-2 bg-white text-gray-500">Or continue with email</span>
+          </div>
+        </div>
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="email" className="block text-sm font-medium mb-2">

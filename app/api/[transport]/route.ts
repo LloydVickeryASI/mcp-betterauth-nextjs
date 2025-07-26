@@ -1,69 +1,56 @@
-import { z } from "zod";
-import { createMcpHandler, withMcpAuth } from "mcp-handler";
-import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { auth } from "@/lib/auth";
+import { createMcpHandler } from "mcp-handler";
+import { withMcpAuth } from "better-auth/plugins";
+import { z } from "zod";
 
-const baseHandler = createMcpHandler(
-  (server) => {
-    server.tool(
-      "echo",
-      "Echo back a string",
-      { message: z.string() },
-      async ({ message }) => ({
-        content: [{ type: "text", text: `Echo: ${message}` }],
-      }),
-    );
-    
-    server.tool(
-      "get_auth_status",
-      "Get authentication status",
-      {},
-      async () => ({
-        content: [{
-          type: "text",
-          text: "Authenticated via Better Auth MCP"
-        }],
-      }),
-    );
-  },
-  {},
-  {
-    basePath: "/api",
-    redisUrl: process.env.REDIS_URL,
-    verboseLogs: true,
-    maxDuration: 60,
-  },
-);
-
-const verifyToken = async (
-  req: Request,
-  bearerToken?: string
-): Promise<AuthInfo | undefined> => {
-  if (!bearerToken) return undefined;
-
-  try {
-    const session = await auth.api.getMcpSession({
-      headers: req.headers
-    });
-    
-    if (session) {
-      return {
-        token: bearerToken,
-        scopes: Array.isArray(session.scopes) ? session.scopes : [],
-        clientId: session.clientId || "unknown",
-        extra: { session }
-      };
-    }
-  } catch (error) {
-    console.error("Token verification failed:", error);
-  }
-  
-  return undefined;
-};
-
-const handler = withMcpAuth(baseHandler, verifyToken, {
-  required: true,
-  resourceMetadataPath: "/.well-known/oauth-protected-resource"
+const handler = withMcpAuth(auth, (req, session) => {
+    // session contains the access token record with scopes and user ID
+    return createMcpHandler(
+        (server) => {
+            server.tool(
+                "echo",
+                "Echo back a string",
+                { message: z.string() },
+                async ({ message }) => {
+                    return {
+                        content: [{ type: "text", text: `Echo: ${message}` }],
+                    };
+                },
+            );
+            
+            server.tool(
+                "get_auth_status",
+                "Get authentication status",
+                {},
+                async () => {
+                    return {
+                        content: [{
+                            type: "text",
+                            text: `Authenticated via Better Auth MCP - User ID: ${session.userId}`
+                        }],
+                    };
+                },
+            );
+        },
+        {
+            capabilities: {
+                tools: {
+                    echo: {
+                        description: "Echo a message",
+                    },
+                    get_auth_status: {
+                        description: "Get authentication status",
+                    },
+                },
+            },
+        },
+        {
+            redisUrl: process.env.REDIS_URL,
+            basePath: "/api",
+            verboseLogs: true,
+            maxDuration: 60,
+        },
+    )(req);
 });
 
-export { handler as GET, handler as POST };
+export { handler as GET, handler as POST, handler as DELETE };
