@@ -1,19 +1,123 @@
-import { z } from "zod";
+import { auth } from "@/lib/auth";
 import { createMcpHandler } from "mcp-handler";
+import { withMcpAuth } from "better-auth/plugins";
+import { z } from "zod";
+import Database from "better-sqlite3";
 
-const handler = createMcpHandler(
-  (server) => {
-    server.tool(
-      "roll_dice",
-      "Rolls an N-sided die",
-      { sides: z.number().int().min(2) },
-      async ({ sides }) => ({
-        content: [{ type: "text", text: `You rolled a ${1 + Math.floor(Math.random()*sides)}!` }],
-      }),
-    );
-  },
-  {},
-  { basePath: "/api" },
-);
+const handler = withMcpAuth(auth, async (req, session) => {
+    // The session from withMcpAuth contains the MCP access token session
+    console.log("MCP Session:", JSON.stringify(session, null, 2));
+    
+    return createMcpHandler(
+        (server) => {
+            server.tool(
+                "echo",
+                "Echo back a string",
+                { message: z.string() },
+                async ({ message }) => {
+                    return {
+                        content: [{ type: "text", text: `Echo: ${message}` }],
+                    };
+                },
+            );
+            
+            server.tool(
+                "get_auth_status",
+                "Get authentication status with user profile",
+                {},
+                async () => {
+                    // Display all available session information
+                    const sessionInfo: any = {
+                        authenticated: true,
+                        mcpSession: session,
+                        provider: "Microsoft"
+                    };
+
+                    // Try to get user info using the userId from MCP session
+                    try {
+                        // Query the database directly for user information
+                        const db = auth.options.database as any;
+                        const user = db.prepare('SELECT * FROM user WHERE id = ?').get(session.userId);
+                        
+                        if (user) {
+                            sessionInfo.userProfile = {
+                                id: user.id,
+                                email: user.email,
+                                name: user.name,
+                                image: user.image,
+                                emailVerified: user.emailVerified,
+                                createdAt: user.createdAt,
+                                updatedAt: user.updatedAt
+                            };
+                        }
+                        
+                        // Also try to get the account information for Microsoft provider details
+                        const account = db.prepare('SELECT * FROM account WHERE userId = ? AND providerId = ?').get(session.userId, 'microsoft');
+                        if (account) {
+                            sessionInfo.providerAccount = {
+                                providerId: account.providerId,
+                                accountId: account.accountId,
+                                createdAt: account.createdAt
+                            };
+                        }
+                    } catch (error) {
+                        console.error("Error fetching user data:", error);
+                    }
+
+                    return {
+                        content: [{
+                            type: "text",
+                            text: JSON.stringify(sessionInfo, null, 2)
+                        }],
+                    };
+                },
+            );
+        },
+        {
+            capabilities: {
+                tools: {
+                    echo: {
+                        description: "Echo a message",
+                    },
+                    get_auth_status: {
+                        description: "Get authentication status with Microsoft profile information",
+                    },
+                },
+            },
+        },
+        {
+            // redisUrl: process.env.REDIS_URL,
+            basePath: "/api",
+            verboseLogs: true,            
+            maxDuration: 60,
+        },
+    )(req);
+});
 
 export { handler as GET, handler as POST, handler as DELETE };
+
+
+// import { auth } from "@/lib/auth";
+// import { createMcpHandler } from "mcp-handler";
+// import { withMcpAuth } from "better-auth/plugins";
+// import { z } from "zod";
+
+// const handler = withMcpAuth(auth, (req, session) => {
+//     // session contains the access token record with scopes and user ID
+//     return createMcpHandler(
+//         (server) => {
+//             server.tool(
+//                 "roll_dice",
+//                 "Rolls an N-sided die",
+//                 { sides: z.number().int().min(2) },
+//                 async ({ sides }) => ({
+//                     content: [{ type: "text", text: `You rolled a ${1 + Math.floor(Math.random()*sides)}!` }],
+//                 }),
+//             );
+//         },
+//         {},
+//         { basePath: "/api" },
+//     )(req);
+// });
+
+// export { handler as GET, handler as POST, handler as DELETE };

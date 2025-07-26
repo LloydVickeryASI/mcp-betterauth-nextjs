@@ -12,15 +12,11 @@ A Model Context Protocol (MCP) server built with Next.js and Better Auth for OAu
 
 ## Endpoints
 
-### Public MCP Endpoint
+### MCP Endpoint (OAuth Protected)
 - **URL**: `/api/mcp`
-- **Tool**: `roll_dice` - Rolls an N-sided die
-
-### Secured MCP Endpoint  
-- **URL**: `/api/[transport]` (supports `sse` or `streamable-http`)
 - **Tools**: 
   - `echo` - Echo back a string
-  - `get_auth_status` - Get authentication status
+  - `get_auth_status` - Get authentication status with Microsoft profile information (name, email, image, etc.)
 - **Requires**: OAuth bearer token from Better Auth
 
 ### OAuth Discovery

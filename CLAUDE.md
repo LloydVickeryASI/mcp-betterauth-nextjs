@@ -37,10 +37,12 @@ This is a Next.js 15 application that implements an MCP (Model Context Protocol)
    - Session management with MCP-specific auth tokens
 
 2. **MCP Endpoints**:
-   - **Public**: `/api/mcp` - Exposes `roll_dice` tool without authentication
-   - **Secured**: `/api/[transport]` - Requires OAuth bearer token, supports SSE and streamable-http transports
-     - Tools: `echo`, `get_auth_status`
+   - **Secured**: `/api/mcp` - Requires OAuth bearer token
+     - Tools: 
+       - `echo` - Echoes back a string message
+       - `get_auth_status` - Returns authentication status with full Microsoft profile information including name, email, image, and account details
      - Uses `withMcpAuth` wrapper for token verification
+     - Queries SQLite database to retrieve user profile data
 
 3. **OAuth Discovery**: Well-known endpoints for OAuth metadata
    - `/.well-known/oauth-authorization-server`
@@ -69,5 +71,5 @@ Required in `.env.local`:
 ## Important Notes
 
 - Always build before pushing to git
-- The secured MCP endpoint verifies tokens using Better Auth's `getMcpSession` API
+- The secured MCP endpoint verifies tokens using Better Auth's `withMcpAuth` middleware
 - MCP handlers use `mcp-handler` package for Vercel deployment compatibility
