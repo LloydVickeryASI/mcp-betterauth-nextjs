@@ -22,7 +22,7 @@ const handler = withMcpAuth(auth, (req, session) =>
         async () => ({
           content: [{
             type: "text",
-            text: `Current user: ${session?.user?.email || 'Unknown'}`
+            text: `Current user: ${session?.sub || 'Unknown'}`
           }],
         }),
       );
