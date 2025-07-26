@@ -27,15 +27,28 @@ const handler = withMcpAuth(auth, async (req, session) => {
             
             server.tool(
                 "search_hubspot_contacts",
-                "Search HubSpot contacts by exact email address",
+                "Search HubSpot contacts by email",
                 {
                     query: {
                         type: "string",
-                        description: "The exact email address to search for"
+                        description: "The email address to search for (supports partial matches)"
                     }
                 },
                 async ({ query }) => {
                     try {
+                        // Validate query
+                        if (!query || query.trim() === '') {
+                            return {
+                                content: [{
+                                    type: "text",
+                                    text: JSON.stringify({
+                                        error: true,
+                                        message: "Please provide an email address to search for"
+                                    }, null, 2)
+                                }],
+                            };
+                        }
+                        
                         // Check if user has HubSpot account linked
                         const db = auth.options.database as any;
                         const hubspotAccount = db.prepare('SELECT * FROM account WHERE userId = ? AND providerId = ?').get(session.userId, 'hubspot');
@@ -57,6 +70,10 @@ const handler = withMcpAuth(auth, async (req, session) => {
                         
                         // Search contacts using HubSpot API
                         const searchUrl = "https://api.hubapi.com/crm/v3/objects/contacts/search";
+                        
+                        // Determine if query looks like a complete email
+                        const isCompleteEmail = query.includes('@') && query.includes('.');
+                        
                         const response = await fetch(searchUrl, {
                             method: "POST",
                             headers: {
@@ -69,8 +86,8 @@ const handler = withMcpAuth(auth, async (req, session) => {
                                         filters: [
                                             {
                                                 propertyName: "email",
-                                                operator: "EQ",
-                                                value: query
+                                                operator: isCompleteEmail ? "EQ" : "CONTAINS_TOKEN",
+                                                value: query.trim()
                                             }
                                         ]
                                     }
@@ -204,7 +221,7 @@ const handler = withMcpAuth(auth, async (req, session) => {
                         description: "Echo a message",
                     },
                     search_hubspot_contacts: {
-                        description: "Search HubSpot contacts by exact email address",
+                        description: "Search HubSpot contacts by email (exact match for full emails, partial match for fragments)",
                     },
                     get_auth_status: {
                         description: "Get authentication status with Microsoft profile information",
