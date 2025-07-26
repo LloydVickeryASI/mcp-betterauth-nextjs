@@ -62,7 +62,8 @@ const verifyToken = async (
 };
 
 const handler = withMcpAuth(baseHandler, verifyToken, {
-  required: true
+  required: true,
+  resourceMetadataPath: "/.well-known/oauth-protected-resource"
 });
 
 export { handler as GET, handler as POST };
