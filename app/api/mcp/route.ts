@@ -1,7 +1,6 @@
 import { auth } from "@/lib/auth";
 import { createMcpHandler } from "mcp-handler";
 import { withMcpAuth } from "better-auth/plugins";
-import { z } from "zod";
 import Database from "better-sqlite3";
 
 const handler = withMcpAuth(auth, async (req, session) => {
@@ -13,11 +12,111 @@ const handler = withMcpAuth(auth, async (req, session) => {
             server.tool(
                 "echo",
                 "Echo back a string",
-                { message: z.string() },
+                {
+                    message: {
+                        type: "string",
+                        description: "The message to echo back"
+                    }
+                },
                 async ({ message }) => {
                     return {
                         content: [{ type: "text", text: `Echo: ${message}` }],
                     };
+                },
+            );
+            
+            server.tool(
+                "search_hubspot_contacts",
+                "Search HubSpot contacts",
+                {
+                    query: {
+                        type: "string",
+                        description: "The search query for contacts"
+                    }
+                },
+                async ({ query }) => {
+                    try {
+                        // Check if user has HubSpot account linked
+                        const db = auth.options.database as any;
+                        const hubspotAccount = db.prepare('SELECT * FROM account WHERE userId = ? AND providerId = ?').get(session.userId, 'hubspot');
+                        
+                        if (!hubspotAccount || !hubspotAccount.accessToken) {
+                            // User needs to authenticate with HubSpot
+                            const authUrl = `${auth.options.baseURL}/sign-in`;
+                            return {
+                                content: [{
+                                    type: "text",
+                                    text: JSON.stringify({
+                                        authenticated: false,
+                                        message: "You need to authenticate with HubSpot first. Please visit the sign-in page and click 'Continue with HubSpot'",
+                                        authUrl: authUrl
+                                    }, null, 2)
+                                }],
+                            };
+                        }
+                        
+                        // Search contacts using HubSpot API
+                        const searchUrl = "https://api.hubapi.com/crm/v3/objects/contacts/search";
+                        const response = await fetch(searchUrl, {
+                            method: "POST",
+                            headers: {
+                                "Authorization": `Bearer ${hubspotAccount.accessToken}`,
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify({
+                                filterGroups: [{
+                                    filters: [{
+                                        propertyName: "email",
+                                        operator: "CONTAINS_TOKEN",
+                                        value: query
+                                    }]
+                                }],
+                                properties: ["firstname", "lastname", "email", "phone", "company"],
+                                limit: 10
+                            })
+                        });
+                        
+                        if (!response.ok) {
+                            // Token might be expired, provide auth URL
+                            if (response.status === 401) {
+                                const authUrl = `${auth.options.baseURL}/sign-in`;
+                                return {
+                                    content: [{
+                                        type: "text",
+                                        text: JSON.stringify({
+                                            authenticated: false,
+                                            message: "HubSpot token expired. Please re-authenticate by visiting the sign-in page and clicking 'Continue with HubSpot'",
+                                            authUrl: authUrl
+                                        }, null, 2)
+                                    }],
+                                };
+                            }
+                            throw new Error(`HubSpot API error: ${response.statusText}`);
+                        }
+                        
+                        const data = await response.json();
+                        return {
+                            content: [{
+                                type: "text",
+                                text: JSON.stringify({
+                                    authenticated: true,
+                                    results: data.results,
+                                    total: data.total
+                                }, null, 2)
+                            }],
+                        };
+                        
+                    } catch (error) {
+                        return {
+                            content: [{
+                                type: "text",
+                                text: JSON.stringify({
+                                    error: true,
+                                    message: error instanceof Error ? error.message : "Unknown error occurred"
+                                }, null, 2)
+                            }],
+                        };
+                    }
                 },
             );
             
@@ -78,6 +177,9 @@ const handler = withMcpAuth(auth, async (req, session) => {
                 tools: {
                     echo: {
                         description: "Echo a message",
+                    },
+                    search_hubspot_contacts: {
+                        description: "Search HubSpot contacts by email",
                     },
                     get_auth_status: {
                         description: "Get authentication status with Microsoft profile information",
