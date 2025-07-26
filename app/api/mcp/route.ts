@@ -27,11 +27,11 @@ const handler = withMcpAuth(auth, async (req, session) => {
             
             server.tool(
                 "search_hubspot_contacts",
-                "Search HubSpot contacts",
+                "Search HubSpot contacts by exact email address",
                 {
                     query: {
                         type: "string",
-                        description: "The search query for contacts"
+                        description: "The exact email address to search for"
                     }
                 },
                 async ({ query }) => {
@@ -64,13 +64,17 @@ const handler = withMcpAuth(auth, async (req, session) => {
                                 "Content-Type": "application/json"
                             },
                             body: JSON.stringify({
-                                filterGroups: [{
-                                    filters: [{
-                                        propertyName: "email",
-                                        operator: "CONTAINS_TOKEN",
-                                        value: query
-                                    }]
-                                }],
+                                filterGroups: [
+                                    {
+                                        filters: [
+                                            {
+                                                propertyName: "email",
+                                                operator: "EQ",
+                                                value: query
+                                            }
+                                        ]
+                                    }
+                                ],
                                 properties: ["firstname", "lastname", "email", "phone", "company"],
                                 limit: 10
                             })
@@ -91,7 +95,28 @@ const handler = withMcpAuth(auth, async (req, session) => {
                                     }],
                                 };
                             }
-                            throw new Error(`HubSpot API error: ${response.statusText}`);
+                            
+                            // Get error details
+                            const errorText = await response.text();
+                            let errorDetails;
+                            try {
+                                errorDetails = JSON.parse(errorText);
+                            } catch {
+                                errorDetails = errorText;
+                            }
+                            
+                            return {
+                                content: [{
+                                    type: "text",
+                                    text: JSON.stringify({
+                                        error: true,
+                                        status: response.status,
+                                        statusText: response.statusText,
+                                        details: errorDetails,
+                                        message: `HubSpot API error: ${response.status} ${response.statusText}`
+                                    }, null, 2)
+                                }],
+                            };
                         }
                         
                         const data = await response.json();
@@ -179,7 +204,7 @@ const handler = withMcpAuth(auth, async (req, session) => {
                         description: "Echo a message",
                     },
                     search_hubspot_contacts: {
-                        description: "Search HubSpot contacts by email",
+                        description: "Search HubSpot contacts by exact email address",
                     },
                     get_auth_status: {
                         description: "Get authentication status with Microsoft profile information",
