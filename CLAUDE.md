@@ -1,0 +1,1 @@
+- Always build before pushing to git
