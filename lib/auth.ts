@@ -65,6 +65,38 @@ export const auth = betterAuth({
             };
           },
         },
+        {
+          providerId: "pandadoc",
+          clientId: process.env.PANDADOC_CLIENT_ID!,
+          clientSecret: process.env.PANDADOC_CLIENT_SECRET!,
+          authorizationUrl: "https://app.pandadoc.com/oauth2/authorize",
+          tokenUrl: "https://api.pandadoc.com/oauth2/access_token",
+          scopes: ["read+write"],
+          getUserInfo: async (tokens) => {
+            // Get current user info from PandaDoc API
+            const userResponse = await fetch("https://api.pandadoc.com/public/v1/members/current", {
+              headers: {
+                Authorization: `Bearer ${tokens.accessToken}`,
+                "Content-Type": "application/json",
+              },
+            });
+            
+            if (!userResponse.ok) {
+              return null;
+            }
+            
+            const userData = await userResponse.json();
+            
+            return {
+              id: userData.user_id || userData.membership_id,
+              email: userData.email || "",
+              name: `${userData.first_name || ""} ${userData.last_name || ""}`.trim() || userData.email || "",
+              emailVerified: true,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            };
+          },
+        },
       ],
     }),
     nextCookies(),

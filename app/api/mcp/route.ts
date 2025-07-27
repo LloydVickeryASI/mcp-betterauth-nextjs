@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { createMcpHandler } from "mcp-handler";
 import { withMcpAuth } from "better-auth/plugins";
 import Database from "better-sqlite3";
+import { z } from "zod";
 
 const handler = withMcpAuth(auth, async (req, session) => {
     // The session from withMcpAuth contains the MCP access token session
@@ -13,10 +14,7 @@ const handler = withMcpAuth(auth, async (req, session) => {
                 "echo",
                 "Echo back a string",
                 {
-                    message: {
-                        type: "string",
-                        description: "The message to echo back"
-                    }
+                    message: z.string().describe("The message to echo back")
                 },
                 async ({ message }) => {
                     return {
@@ -29,10 +27,7 @@ const handler = withMcpAuth(auth, async (req, session) => {
                 "search_hubspot_contacts",
                 "Search HubSpot contacts by email",
                 {
-                    query: {
-                        type: "string",
-                        description: "The email address to search for (supports partial matches)"
-                    }
+                    query: z.string().describe("The email address to search for (supports partial matches)")
                 },
                 async ({ query }) => {
                     try {
@@ -163,6 +158,133 @@ const handler = withMcpAuth(auth, async (req, session) => {
             );
             
             server.tool(
+                "list_pandadoc_documents",
+                "List documents from PandaDoc",
+                {
+                    status: z.enum(["draft", "sent", "completed", "expired", "declined", "voided"]).optional().describe("Filter documents by status"),
+                    limit: z.number().min(1).max(100).default(20).optional().describe("Number of documents to return (default: 20, max: 100)"),
+                    page: z.number().min(1).default(1).optional().describe("Page number for pagination (default: 1)")
+                },
+                async ({ status, limit = 20, page = 1 }) => {
+                    try {
+                        // Check if user has PandaDoc account linked
+                        const db = auth.options.database as any;
+                        const pandadocAccount = db.prepare('SELECT * FROM account WHERE userId = ? AND providerId = ?').get(session.userId, 'pandadoc');
+                        
+                        if (!pandadocAccount || !pandadocAccount.accessToken) {
+                            // User needs to authenticate with PandaDoc
+                            const authUrl = `${auth.options.baseURL}/sign-in`;
+                            return {
+                                content: [{
+                                    type: "text",
+                                    text: JSON.stringify({
+                                        authenticated: false,
+                                        message: "You need to authenticate with PandaDoc first. Please visit the sign-in page and click 'Continue with PandaDoc'",
+                                        authUrl: authUrl
+                                    }, null, 2)
+                                }],
+                            };
+                        }
+                        
+                        // Build query parameters
+                        const params = new URLSearchParams({
+                            limit: limit.toString(),
+                            page: page.toString()
+                        });
+                        
+                        if (status) {
+                            params.append('status', status);
+                        }
+                        
+                        // List documents using PandaDoc API
+                        const response = await fetch(`https://api.pandadoc.com/public/v1/documents?${params.toString()}`, {
+                            headers: {
+                                "Authorization": `Bearer ${pandadocAccount.accessToken}`,
+                                "Content-Type": "application/json"
+                            }
+                        });
+                        
+                        if (!response.ok) {
+                            // Token might be expired, provide auth URL
+                            if (response.status === 401) {
+                                const authUrl = `${auth.options.baseURL}/sign-in`;
+                                return {
+                                    content: [{
+                                        type: "text",
+                                        text: JSON.stringify({
+                                            authenticated: false,
+                                            message: "PandaDoc token expired. Please re-authenticate by visiting the sign-in page and clicking 'Continue with PandaDoc'",
+                                            authUrl: authUrl
+                                        }, null, 2)
+                                    }],
+                                };
+                            }
+                            
+                            // Get error details
+                            const errorText = await response.text();
+                            let errorDetails;
+                            try {
+                                errorDetails = JSON.parse(errorText);
+                            } catch {
+                                errorDetails = errorText;
+                            }
+                            
+                            return {
+                                content: [{
+                                    type: "text",
+                                    text: JSON.stringify({
+                                        error: true,
+                                        status: response.status,
+                                        statusText: response.statusText,
+                                        details: errorDetails,
+                                        message: `PandaDoc API error: ${response.status} ${response.statusText}`
+                                    }, null, 2)
+                                }],
+                            };
+                        }
+                        
+                        const data = await response.json();
+                        
+                        // Format the response with relevant document information
+                        const formattedResults = data.results.map((doc: any) => ({
+                            id: doc.id,
+                            name: doc.name,
+                            status: doc.status,
+                            date_created: doc.date_created,
+                            date_modified: doc.date_modified,
+                            created_by: doc.created_by,
+                            recipients: doc.recipients
+                        }));
+                        
+                        return {
+                            content: [{
+                                type: "text",
+                                text: JSON.stringify({
+                                    authenticated: true,
+                                    results: formattedResults,
+                                    count: data.count,
+                                    page: page,
+                                    limit: limit,
+                                    total_pages: Math.ceil(data.count / limit)
+                                }, null, 2)
+                            }],
+                        };
+                        
+                    } catch (error) {
+                        return {
+                            content: [{
+                                type: "text",
+                                text: JSON.stringify({
+                                    error: true,
+                                    message: error instanceof Error ? error.message : "Unknown error occurred"
+                                }, null, 2)
+                            }],
+                        };
+                    }
+                },
+            );
+            
+            server.tool(
                 "get_auth_status",
                 "Get authentication status with user profile",
                 {},
@@ -222,6 +344,9 @@ const handler = withMcpAuth(auth, async (req, session) => {
                     },
                     search_hubspot_contacts: {
                         description: "Search HubSpot contacts by email (exact match for full emails, partial match for fragments)",
+                    },
+                    list_pandadoc_documents: {
+                        description: "List PandaDoc documents with optional status filter and pagination",
                     },
                     get_auth_status: {
                         description: "Get authentication status with Microsoft profile information",
