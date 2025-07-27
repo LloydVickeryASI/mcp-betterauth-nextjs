@@ -2,13 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { createAuthClient } from "better-auth/react";
-import { genericOAuthClient } from "better-auth/client/plugins";
-
-const authClient = createAuthClient({
-  baseURL: process.env.NEXT_PUBLIC_AUTH_URL || "http://localhost:3000",
-  plugins: [genericOAuthClient()]
-});
+import { authClient } from "@/lib/auth-client";
 
 function SignInContent() {
   const [email, setEmail] = useState('');
@@ -32,7 +26,7 @@ function SignInContent() {
       if (mcpParams) {
         window.location.href = `/api/auth/mcp/authorize?${mcpParams}`;
       } else {
-        window.location.href = '/';
+        window.location.href = '/connections';
       }
     }
   };
@@ -44,27 +38,10 @@ function SignInContent() {
     
     await authClient.signIn.social({
       provider: "microsoft",
-      callbackURL: mcpParams ? `/api/auth/mcp/authorize?${mcpParams}` : "/",
+      callbackURL: mcpParams ? `/api/auth/mcp/authorize?${mcpParams}` : "/connections",
     });
   };
 
-  const handleHubSpotSignIn = async () => {
-    const mcpParams = searchParams.toString();
-    
-    await authClient.signIn.social({
-      provider: "hubspot",
-      callbackURL: mcpParams ? `/api/auth/mcp/authorize?${mcpParams}` : "/",
-    });
-  };
-
-  const handlePandaDocSignIn = async () => {
-    const mcpParams = searchParams.toString();
-    
-    await authClient.signIn.social({
-      provider: "pandadoc",
-      callbackURL: mcpParams ? `/api/auth/mcp/authorize?${mcpParams}` : "/",
-    });
-  };
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center p-24">
@@ -84,32 +61,6 @@ function SignInContent() {
           Continue with Microsoft
         </button>
 
-        <button
-          onClick={handleHubSpotSignIn}
-          className="w-full bg-orange-500 text-white py-2 px-4 rounded-md hover:bg-orange-600 transition-colors flex items-center justify-center gap-2 mb-4"
-        >
-          <svg className="w-5 h-5" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M22.5 11.5V8C22.5 6.34315 21.1569 5 19.5 5C17.8431 5 16.5 6.34315 16.5 8V11.5C16.5 13.1569 17.8431 14.5 19.5 14.5C21.1569 14.5 22.5 13.1569 22.5 11.5Z" fill="white"/>
-            <path d="M22.5 22.5C22.5 23.8807 21.3807 25 20 25C18.6193 25 17.5 23.8807 17.5 22.5C17.5 21.1193 18.6193 20 20 20C21.3807 20 22.5 21.1193 22.5 22.5Z" fill="white"/>
-            <path d="M9.5 12C10.8807 12 12 10.8807 12 9.5C12 8.11929 10.8807 7 9.5 7C8.11929 7 7 8.11929 7 9.5C7 10.8807 8.11929 12 9.5 12Z" fill="white"/>
-            <path d="M10.5 15.5H8.5C7.39543 15.5 6.5 16.3954 6.5 17.5V24C6.5 24.2761 6.72386 24.5 7 24.5H12C12.2761 24.5 12.5 24.2761 12.5 24V17.5C12.5 16.3954 11.6046 15.5 10.5 15.5Z" fill="white"/>
-            <path d="M15.5 9.5H11.5M11.5 9.5L20 22.5M11.5 9.5L20 11.5" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-          </svg>
-          Continue with HubSpot
-        </button>
-
-        <button
-          onClick={handlePandaDocSignIn}
-          className="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 transition-colors flex items-center justify-center gap-2 mb-6"
-        >
-          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" fill="white"/>
-            <path d="M8 12.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5-.67 1.5-1.5 1.5-1.5-.67-1.5-1.5z" fill="#4CAF50"/>
-            <path d="M13 12.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5-.67 1.5-1.5 1.5-1.5-.67-1.5-1.5z" fill="#4CAF50"/>
-            <path d="M7 16c0 2.21 1.79 4 4 4h2c2.21 0 4-1.79 4-4" stroke="#4CAF50" strokeWidth="2" strokeLinecap="round"/>
-          </svg>
-          Continue with PandaDoc
-        </button>
 
         <div className="relative my-6">
           <div className="absolute inset-0 flex items-center">

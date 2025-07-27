@@ -50,14 +50,15 @@ const handler = withMcpAuth(auth, async (req, session) => {
                         
                         if (!hubspotAccount || !hubspotAccount.accessToken) {
                             // User needs to authenticate with HubSpot
-                            const authUrl = `${auth.options.baseURL}/sign-in`;
+                            const connectionsUrl = `${auth.options.baseURL}/connections`;
                             return {
                                 content: [{
                                     type: "text",
                                     text: JSON.stringify({
                                         authenticated: false,
-                                        message: "You need to authenticate with HubSpot first. Please visit the sign-in page and click 'Continue with HubSpot'",
-                                        authUrl: authUrl
+                                        message: "HubSpot account not connected. Please visit the connections page to link your HubSpot account.",
+                                        connectionsUrl: connectionsUrl,
+                                        provider: "hubspot"
                                     }, null, 2)
                                 }],
                             };
@@ -95,14 +96,15 @@ const handler = withMcpAuth(auth, async (req, session) => {
                         if (!response.ok) {
                             // Token might be expired, provide auth URL
                             if (response.status === 401) {
-                                const authUrl = `${auth.options.baseURL}/sign-in`;
+                                const connectionsUrl = `${auth.options.baseURL}/connections`;
                                 return {
                                     content: [{
                                         type: "text",
                                         text: JSON.stringify({
                                             authenticated: false,
-                                            message: "HubSpot token expired. Please re-authenticate by visiting the sign-in page and clicking 'Continue with HubSpot'",
-                                            authUrl: authUrl
+                                            message: "HubSpot token expired. Please reconnect your HubSpot account on the connections page.",
+                                            connectionsUrl: connectionsUrl,
+                                            provider: "hubspot"
                                         }, null, 2)
                                     }],
                                 };
@@ -174,14 +176,15 @@ const handler = withMcpAuth(auth, async (req, session) => {
                         
                         if (!pandadocAccount || !pandadocAccount.accessToken) {
                             // User needs to authenticate with PandaDoc
-                            const authUrl = `${auth.options.baseURL}/sign-in`;
+                            const connectionsUrl = `${auth.options.baseURL}/connections`;
                             return {
                                 content: [{
                                     type: "text",
                                     text: JSON.stringify({
                                         authenticated: false,
-                                        message: "You need to authenticate with PandaDoc first. Please visit the sign-in page and click 'Continue with PandaDoc'",
-                                        authUrl: authUrl
+                                        message: "PandaDoc account not connected. Please visit the connections page to link your PandaDoc account.",
+                                        connectionsUrl: connectionsUrl,
+                                        provider: "pandadoc"
                                     }, null, 2)
                                 }],
                             };
@@ -212,14 +215,15 @@ const handler = withMcpAuth(auth, async (req, session) => {
                         if (!response.ok) {
                             // Token might be expired, provide auth URL
                             if (response.status === 401) {
-                                const authUrl = `${auth.options.baseURL}/sign-in`;
+                                const connectionsUrl = `${auth.options.baseURL}/connections`;
                                 return {
                                     content: [{
                                         type: "text",
                                         text: JSON.stringify({
                                             authenticated: false,
-                                            message: "PandaDoc token expired. Please re-authenticate by visiting the sign-in page and clicking 'Continue with PandaDoc'",
-                                            authUrl: authUrl
+                                            message: "PandaDoc token expired. Please reconnect your PandaDoc account on the connections page.",
+                                            connectionsUrl: connectionsUrl,
+                                            provider: "pandadoc"
                                         }, null, 2)
                                     }],
                                 };

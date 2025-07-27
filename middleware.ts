@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
+  // Let the connections page handle its own authentication
+  // The MCP OAuth flow might use different session management
+
   // Handle CORS for /api/auth/* routes
   if (request.nextUrl.pathname.startsWith('/api/auth')) {
     // Debug logging
@@ -34,5 +37,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: '/api/:path*'
+  matcher: ['/api/:path*']
 }
