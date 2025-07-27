@@ -1,0 +1,12 @@
+{
+  "hooks": {
+    "toolCall": [
+      {
+        "tool": ["Edit", "MultiEdit", "Write"],
+        "command": "cd /Users/lvickery/Documents/GitHub/mcp-betterauth-nextjs && pnpm run typecheck",
+        "blocking": false,
+        "description": "Run TypeScript type check after file edits"
+      }
+    ]
+  }
+}

@@ -68,8 +68,13 @@ export function registerTool(
         return {
           content: [{
             type: "text",
-            text: errorMessage
+            text: JSON.stringify({
+              error: true,
+              message: errorMessage,
+              details: err instanceof Error ? err.message : String(err)
+            }, null, 2)
           }],
+          isError: true
         };
       } finally {
         // Clear user context after each tool execution

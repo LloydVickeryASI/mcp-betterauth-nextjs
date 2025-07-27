@@ -1,16 +1,16 @@
 # External API Helpers
 
-A comprehensive set of helpers for managing external API calls with built-in rate limiting, retries, circuit breakers, caching, and more.
+A streamlined set of helpers for managing external API calls that leverages Better Auth's built-in token management while adding rate limiting, retries, circuit breakers, and caching.
 
 ## Features
 
 - 🚦 **Rate Limiting** - Prevent API overload with configurable limits per provider
 - 🔄 **Automatic Retries** - Exponential backoff with jitter for transient failures
-- 🔐 **OAuth Token Management** - Automatic token refresh before expiry
+- 🔐 **OAuth Token Management** - Uses Better Auth's automatic token refresh
 - 🛡️ **Circuit Breaker** - Prevent cascading failures when providers are down
 - 💾 **Request Caching** - Reduce API calls with intelligent caching
 - 📊 **Logging & Monitoring** - Automatic request/response logging with Sentry integration
-- ⚡ **Unified API Client** - Single interface for all external API calls
+- ⚡ **Simplified API Client** - Clean interface that integrates with Better Auth
 - 🎯 **Error Standardization** - Consistent error handling across providers
 
 ## Quick Start
@@ -18,19 +18,25 @@ A comprehensive set of helpers for managing external API calls with built-in rat
 ```typescript
 import { apiClient, isProviderConnected } from "@/lib/external-api-helpers";
 
-// Check if provider is connected
-const isConnected = await isProviderConnected(userId, 'hubspot');
+// Check if provider is connected (returns connection status and account ID)
+const connectionStatus = await isProviderConnected(userId, 'hubspot');
+
+if (!connectionStatus.connected) {
+  // Handle not connected
+  return;
+}
 
 // Make an API call
 const response = await apiClient.get(
-  'hubspot',           // provider
-  userId,              // user ID
-  '/contacts/v1/lists', // API path
-  'list_contacts',     // operation name
+  'hubspot',                      // provider
+  userId,                         // user ID
+  connectionStatus.accountId,     // account ID for token refresh
+  '/objects/contacts',            // API path
+  'list_contacts',                // operation name
   {
     cache: {
       enabled: true,
-      ttlMs: 60000   // Cache for 1 minute
+      ttlMs: 60000              // Cache for 1 minute
     }
   }
 );
@@ -38,58 +44,65 @@ const response = await apiClient.get(
 
 ## Provider Configuration
 
-Add new providers in `provider-config.ts`:
+Providers are configured in `/lib/auth.ts` using Better Auth's genericOAuth plugin:
 
 ```typescript
-export const providerConfigs: Record<string, ProviderConfig> = {
+genericOAuth({
+  config: [
+    {
+      providerId: "hubspot",
+      clientId: process.env.HUBSPOT_CLIENT_ID!,
+      clientSecret: process.env.HUBSPOT_CLIENT_SECRET!,
+      authorizationUrl: "https://app.hubspot.com/oauth/authorize",
+      tokenUrl: "https://api.hubapi.com/oauth/v1/token",
+      scopes: ["crm.objects.contacts.read"],
+      accessType: "offline",  // Request refresh token
+      getUserInfo: async (tokens) => {
+        // Custom user info logic
+      }
+    }
+  ]
+})
+```
+
+To add a new provider's API endpoints, update the `providerEndpoints` in `simplified-api-client.ts`:
+
+```typescript
+const providerEndpoints: Record<string, { baseUrl: string; version?: string }> = {
   newProvider: {
-    name: 'newProvider',
-    displayName: 'New Provider',
-    endpoint: {
-      baseUrl: 'https://api.newprovider.com',
-      version: 'v1',
-      timeout: 30000,
-    },
-    auth: {
-      type: 'oauth2',
-      tokenEndpoint: 'https://api.newprovider.com/oauth/token',
-      headerName: 'Authorization',
-      headerPrefix: 'Bearer',
-    },
-    features: {
-      supportsPagination: true,
-      maxPageSize: 100,
-    },
-    rateLimiter: {
-      maxRequests: 60,
-      windowMs: 60000, // 60 requests per minute
-      maxBurst: 10,
-    },
-    enabled: !!process.env.NEW_PROVIDER_CLIENT_ID,
+    baseUrl: 'https://api.newprovider.com',
+    version: 'v1',
   },
 };
 ```
 
 ## API Client Methods
 
+All methods now include an `accountId` parameter for Better Auth's token refresh:
+
 ### GET Request
 ```typescript
-const response = await apiClient.get(provider, userId, path, operation, options);
+const response = await apiClient.get(
+  provider, 
+  userId, 
+  accountId,  // Required for token refresh
+  path, 
+  operation, 
+  options
+);
 ```
 
 ### POST Request
 ```typescript
-const response = await apiClient.post(provider, userId, path, operation, body, options);
-```
-
-### PUT Request
-```typescript
-const response = await apiClient.put(provider, userId, path, operation, body, options);
-```
-
-### DELETE Request
-```typescript
-const response = await apiClient.delete(provider, userId, path, operation, options);
+const response = await apiClient.post(
+  provider, 
+  userId, 
+  accountId,
+  path, 
+  operation, 
+  body, 
+  options
+);
 ```
 
 ## Options

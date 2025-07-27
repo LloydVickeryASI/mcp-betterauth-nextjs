@@ -1,11 +1,22 @@
+import { auth } from '@/lib/auth';
 import { rateLimiter } from './rate-limiter';
 import { withRetry, providerRetryConfigs } from './retry';
-import { ApiError, mapProviderError, providerErrorMappers } from './errors';
+import { ApiError, mapProviderError, providerErrorMappers, ApiErrorCode } from './errors';
 import { apiLogger } from './logging';
-import { tokenManager } from './token-manager';
-import { providerConfigManager } from './provider-config';
 import { circuitBreakerManager, providerCircuitConfigs } from './circuit-breaker';
 import { cacheManager, CacheKeyBuilder } from './cache';
+
+// Use provider configs from auth.ts instead of duplicating
+const providerEndpoints: Record<string, { baseUrl: string; version?: string }> = {
+  hubspot: {
+    baseUrl: 'https://api.hubapi.com/crm/v3',
+    version: undefined,
+  },
+  pandadoc: {
+    baseUrl: 'https://api.pandadoc.com/public',
+    version: 'v1',
+  },
+};
 
 export interface ApiRequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
@@ -17,7 +28,6 @@ export interface ApiRequestOptions {
     ttlMs?: number;
     key?: string;
   };
-  skipAuth?: boolean;
   skipRateLimit?: boolean;
   skipRetry?: boolean;
   skipCircuitBreaker?: boolean;
@@ -30,16 +40,23 @@ export interface ApiResponse<T = any> {
   cached?: boolean;
 }
 
-export class ExternalApiClient {
+export class SimplifiedApiClient {
   async request<T = any>(
     provider: string,
     userId: string,
+    accountId: string | undefined,
     path: string,
     operation: string,
     options: ApiRequestOptions = {}
   ): Promise<ApiResponse<T>> {
-    const config = providerConfigManager.getConfig(provider);
-    const url = providerConfigManager.getEndpointUrl(provider, path);
+    const endpoint = providerEndpoints[provider];
+    if (!endpoint) {
+      throw new Error(`Unknown provider: ${provider}`);
+    }
+    
+    // Build URL
+    const basePath = endpoint.version ? `/${endpoint.version}` : '';
+    const url = `${endpoint.baseUrl}${basePath}${path}`;
     
     // Build cache key if caching is enabled
     let cacheKey: string | undefined;
@@ -68,17 +85,32 @@ export class ExternalApiClient {
     
     // Create the request function
     const makeRequest = async (): Promise<ApiResponse<T>> => {
-      // Get auth token
-      let authHeaders: Record<string, string> = {};
-      if (!options.skipAuth) {
-        const token = await tokenManager.getValidToken(userId, provider);
-        authHeaders = providerConfigManager.getAuthHeaders(provider, token);
+      // Get access token from the database
+      // Note: Better Auth will handle refresh automatically when we call their API endpoints
+      const db = auth.options.database as any;
+      const account = accountId
+        ? db.prepare('SELECT * FROM account WHERE id = ?').get(accountId)
+        : db.prepare('SELECT * FROM account WHERE userId = ? AND providerId = ?').get(userId, provider);
+      
+      if (!account?.accessToken) {
+        throw new ApiError(
+          ApiErrorCode.UNAUTHORIZED,
+          'No access token available',
+          {
+            provider,
+            operation,
+            originalError: null,
+            retryable: false,
+          }
+        );
       }
       
-      // Build final headers
+      const accessToken = account.accessToken;
+      
+      // Build headers
       const headers = {
-        ...providerConfigManager.getDefaultHeaders(provider),
-        ...authHeaders,
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
         ...options.headers,
       };
       
@@ -115,7 +147,7 @@ export class ExternalApiClient {
           method: options.method || 'GET',
           headers,
           body: options.body ? JSON.stringify(options.body) : undefined,
-          signal: AbortSignal.timeout(config.endpoint.timeout || 30000),
+          signal: AbortSignal.timeout(30000), // 30 second timeout
         });
         
         // Parse response
@@ -207,11 +239,12 @@ export class ExternalApiClient {
   async get<T = any>(
     provider: string,
     userId: string,
+    accountId: string | undefined,
     path: string,
     operation: string,
     options?: Omit<ApiRequestOptions, 'method'>
   ): Promise<ApiResponse<T>> {
-    return this.request<T>(provider, userId, path, operation, {
+    return this.request<T>(provider, userId, accountId, path, operation, {
       ...options,
       method: 'GET',
     });
@@ -220,47 +253,19 @@ export class ExternalApiClient {
   async post<T = any>(
     provider: string,
     userId: string,
+    accountId: string | undefined,
     path: string,
     operation: string,
     body: any,
     options?: Omit<ApiRequestOptions, 'method' | 'body'>
   ): Promise<ApiResponse<T>> {
-    return this.request<T>(provider, userId, path, operation, {
+    return this.request<T>(provider, userId, accountId, path, operation, {
       ...options,
       method: 'POST',
       body,
     });
   }
   
-  async put<T = any>(
-    provider: string,
-    userId: string,
-    path: string,
-    operation: string,
-    body: any,
-    options?: Omit<ApiRequestOptions, 'method' | 'body'>
-  ): Promise<ApiResponse<T>> {
-    return this.request<T>(provider, userId, path, operation, {
-      ...options,
-      method: 'PUT',
-      body,
-    });
-  }
-  
-  async delete<T = any>(
-    provider: string,
-    userId: string,
-    path: string,
-    operation: string,
-    options?: Omit<ApiRequestOptions, 'method'>
-  ): Promise<ApiResponse<T>> {
-    return this.request<T>(provider, userId, path, operation, {
-      ...options,
-      method: 'DELETE',
-    });
-  }
-  
-  // Helper methods
   private async parseResponse<T>(response: Response): Promise<T> {
     const contentType = response.headers.get('content-type');
     
@@ -268,7 +273,6 @@ export class ExternalApiClient {
       return response.json();
     }
     
-    // For non-JSON responses, return as text
     const text = await response.text();
     return text as unknown as T;
   }
@@ -287,25 +291,37 @@ export class ExternalApiClient {
     
     return sanitized;
   }
-  
-  // Status and monitoring
-  getStatus() {
-    return {
-      rateLimiter: Object.fromEntries(
-        providerConfigManager.getEnabledConfigs().map(config => [
-          config.name,
-          rateLimiter.getStatus(config.name),
-        ])
-      ),
-      circuitBreakers: circuitBreakerManager.getStatus(),
-      providers: providerConfigManager.getEnabledConfigs().map(c => ({
-        name: c.name,
-        displayName: c.displayName,
-        enabled: c.enabled,
-      })),
+}
+
+// Helper to check if a provider is connected
+export async function isProviderConnected(
+  userId: string,
+  provider: string
+): Promise<{ connected: boolean; accountId?: string }> {
+  try {
+    // Check if user has an account for this provider
+    const db = auth.options.database as any;
+    const account = db
+      .prepare('SELECT * FROM account WHERE userId = ? AND providerId = ?')
+      .get(userId, provider);
+    
+    if (!account?.accessToken) {
+      return { connected: false };
+    }
+    
+    // Check if token exists (Better Auth will handle refresh when needed)
+    // TODO: In the future, we could check accessTokenExpiresAt to see if it's expired
+    // and preemptively mark as not connected, but for now we'll let the API call fail
+    // and handle the 401 response
+    
+    return { 
+      connected: true,
+      accountId: account.id
     };
+  } catch {
+    return { connected: false };
   }
 }
 
 // Singleton instance
-export const apiClient = new ExternalApiClient();
+export const apiClient = new SimplifiedApiClient();

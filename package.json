@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "typecheck": "tsc --noEmit",
     "tunnel": "./setup-dev-tunnel.js",
     "dev:tunnel": "node setup-dev-tunnel.js"
   },

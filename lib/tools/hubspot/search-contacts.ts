@@ -21,9 +21,9 @@ export const searchContactsHandler = async ({ query }: { query: string }, contex
   }
   
   // Check if user has HubSpot account linked
-  const isConnected = await isProviderConnected(context.session.userId, 'hubspot');
+  const connectionStatus = await isProviderConnected(context.session.userId, 'hubspot');
   
-  if (!isConnected) {
+  if (!connectionStatus.connected) {
     // User needs to authenticate with HubSpot
     const connectionsUrl = `${context.auth.options.baseURL}/connections`;
     return {
@@ -43,11 +43,12 @@ export const searchContactsHandler = async ({ query }: { query: string }, contex
     // Determine if query looks like a complete email
     const isCompleteEmail = query.includes('@') && query.includes('.');
     
-    // Use the unified API client
+    // Use the simplified API client with Better Auth's token management
     const response = await apiClient.post(
       'hubspot',
       context.session.userId,
-      '/crm/v3/objects/contacts/search',
+      connectionStatus.accountId,
+      '/objects/contacts/search',
       'search_contacts',
       {
         filterGroups: [

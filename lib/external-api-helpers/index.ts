@@ -1,5 +1,5 @@
-// Main API client
-export { apiClient, type ApiRequestOptions, type ApiResponse } from './api-client';
+// Main API client - using simplified version
+export { apiClient, isProviderConnected, type ApiRequestOptions, type ApiResponse } from './simplified-api-client';
 
 // Rate limiting
 export { rateLimiter, type RateLimiterConfig } from './rate-limiter';
@@ -18,18 +18,6 @@ export {
 // Logging
 export { apiLogger, type ApiRequestLog, type ApiResponseLog } from './logging';
 
-// Token management
-export { tokenManager, type TokenInfo } from './token-manager';
-
-// Provider configuration
-export {
-  providerConfigManager,
-  type ProviderConfig,
-  type ProviderEndpoint,
-  type ProviderFeatures,
-  type ProviderAuth,
-} from './provider-config';
-
 // Circuit breaker
 export {
   circuitBreakerManager,
@@ -45,22 +33,8 @@ export {
 } from './cache';
 
 // Import managers for helper functions
-import { tokenManager as tm } from './token-manager';
 import { cacheManager as cm } from './cache';
 import { circuitBreakerManager as cbm } from './circuit-breaker';
-
-// Helper function to check if a provider is connected for a user
-export async function isProviderConnected(
-  userId: string,
-  provider: string
-): Promise<boolean> {
-  try {
-    await tm.getValidToken(userId, provider);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 // Helper to clear all caches and reset circuit breakers
 export function resetAllHelpers(): void {

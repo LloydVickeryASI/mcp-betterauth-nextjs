@@ -33,6 +33,7 @@ export const auth = betterAuth({
           tokenUrl: "https://api.hubapi.com/oauth/v1/token",
           userInfoUrl: "https://api.hubapi.com/oauth/v1/access-tokens",
           scopes: ["crm.objects.contacts.read"],
+          accessType: "offline",
           getUserInfo: async (tokens) => {
             // Get access token info to retrieve user details
             const tokenInfoResponse = await fetch(`https://api.hubapi.com/oauth/v1/access-tokens/${tokens.accessToken}`);
@@ -72,6 +73,7 @@ export const auth = betterAuth({
           authorizationUrl: "https://app.pandadoc.com/oauth2/authorize",
           tokenUrl: "https://api.pandadoc.com/oauth2/access_token",
           scopes: ["read+write"],
+          accessType: "offline",
           getUserInfo: async (tokens) => {
             // Get current user info from PandaDoc API
             const userResponse = await fetch("https://api.pandadoc.com/public/v1/members/current", {
