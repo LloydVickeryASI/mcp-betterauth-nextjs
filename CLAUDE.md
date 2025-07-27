@@ -6,19 +6,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # Install dependencies
-npm install
+pnpm install
 
 # Run development server
-npm run dev
+pnpm run dev
 
 # Build for production (always run before pushing to git)
-npm run build
+pnpm run build
 
 # Start production server
-npm start
+pnpm start
 
 # Run linting
-npm run lint
+pnpm run lint
+
+# Run TypeScript type checking
+pnpm run typecheck
 ```
 
 ## Package Manager
@@ -68,8 +71,11 @@ This is a Next.js 15 application that implements an MCP (Model Context Protocol)
   - `/auth.ts` - Better Auth configuration with all OAuth providers
   - `/auth-client.ts` - Better Auth client for React components
   - `/sentry-error-handler.ts` - Centralized Sentry error handling
+  - `/external-api-helpers` - Reusable API client with rate limiting, caching, and circuit breakers
   - `/tools` - MCP tool implementations
     - `/register-tool.ts` - Tool registration helper with Sentry integration
+    - `/create-provider-tool.ts` - Higher-order function for creating provider-specific tools
+    - `/provider-api-helper.ts` - Simplified API helper for provider tools
     - `/hubspot` - HubSpot integration tools
     - `/pandadoc` - PandaDoc integration tools
 - Database: SQLite (`sqlite.db`) for local dev, configurable for production
@@ -96,6 +102,49 @@ Required in `.env.local`:
 - Strict mode enabled
 - Path alias: `@/*` maps to root directory
 - Target: ES2017
+
+### Tool Architecture
+
+The project uses an elegant abstraction for provider-specific tools:
+
+1. **`createProviderTool`** - Higher-order function that:
+   - Automatically checks provider authentication
+   - Handles token expiration gracefully
+   - Provides consistent error responses
+   - Wraps tools with provider context
+
+2. **`ProviderApiHelper`** - Simplifies API calls by:
+   - Automatically including userId, accountId, and provider
+   - Providing typed methods for all HTTP verbs
+   - Integrating with caching, rate limiting, and circuit breakers
+
+3. **Benefits**:
+   - Tools focus only on business logic (~30 lines vs ~110 lines)
+   - Authentication errors handled uniformly
+   - Easy to add new tools and providers
+   - Full TypeScript support throughout
+
+Example of creating a new tool:
+```typescript
+createProviderTool(server, {
+  name: "tool_name",
+  description: "Tool description",
+  provider: "hubspot", // or "pandadoc"
+  schema: {
+    param: z.string().describe("Parameter description")
+  },
+  handler: async ({ param }, context) => {
+    const api = new ProviderApiHelper(context);
+    const response = await api.get('/endpoint', 'operation_name');
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify(response.data, null, 2)
+      }]
+    };
+  }
+});
+```
 
 ## Important Notes
 

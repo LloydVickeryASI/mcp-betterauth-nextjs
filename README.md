@@ -40,7 +40,7 @@ cd mcp-betterauth-nextjs
 
 2. Install dependencies:
 ```bash
-npm install
+pnpm install
 ```
 
 3. Copy environment variables:
@@ -58,7 +58,7 @@ cp .env.example .env.local
 
 5. Run the development server:
 ```bash
-npm run dev
+pnpm run dev
 ```
 
 ### Testing with PandaDoc OAuth
@@ -67,14 +67,14 @@ PandaDoc doesn't allow localhost URLs for OAuth. Use ngrok for local testing:
 
 ```bash
 # Option 1: Use the automated setup script
-npm run tunnel
+pnpm run tunnel
 # Then in another terminal:
-npm run dev
+pnpm run dev
 
 # Option 2: Manual ngrok setup
 ./start-ngrok.sh
 # Update .env.local with the ngrok URL
-# Then run: npm run dev
+# Then run: pnpm run dev
 ```
 
 See [docs/PANDADOC_SETUP.md](docs/PANDADOC_SETUP.md) for detailed instructions.
@@ -140,10 +140,11 @@ Point to the same URL and provide OAuth token from Better Auth's sign-in flow.
 
 ## Development
 
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run lint` - Run ESLint
-- `npm start` - Start production server
+- `pnpm run dev` - Start development server
+- `pnpm run build` - Build for production
+- `pnpm run lint` - Run ESLint
+- `pnpm run typecheck` - Run TypeScript type checking
+- `pnpm start` - Start production server
 
 ## Tech Stack
 
