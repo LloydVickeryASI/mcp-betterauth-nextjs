@@ -47,6 +47,7 @@ This is a Next.js 15 application that implements an MCP (Model Context Protocol)
        - `list_pandadoc_documents` - List PandaDoc documents (requires PandaDoc connection)
      - Uses `withMcpAuth` wrapper for token verification
      - Tools check for specific OAuth connections before executing
+     - All tools have automatic Sentry error tracking with user context
 
 3. **OAuth Discovery**: Well-known endpoints for OAuth metadata
    - `/.well-known/oauth-authorization-server`
@@ -63,8 +64,14 @@ This is a Next.js 15 application that implements an MCP (Model Context Protocol)
   - `/connections` - Tool integration management page
   - `/api/mcp` - MCP server endpoint with tools
   - `/api/connections` - Connection management APIs
-- `/lib/auth.ts` - Better Auth configuration with all OAuth providers
-- `/lib/auth-client.ts` - Better Auth client for React components
+- `/lib` - Library code
+  - `/auth.ts` - Better Auth configuration with all OAuth providers
+  - `/auth-client.ts` - Better Auth client for React components
+  - `/sentry-error-handler.ts` - Centralized Sentry error handling
+  - `/tools` - MCP tool implementations
+    - `/register-tool.ts` - Tool registration helper with Sentry integration
+    - `/hubspot` - HubSpot integration tools
+    - `/pandadoc` - PandaDoc integration tools
 - Database: SQLite (`sqlite.db`) for local dev, configurable for production
 
 ### Environment Variables
@@ -81,6 +88,8 @@ Required in `.env.local`:
 - `PANDADOC_CLIENT_ID` - PandaDoc OAuth app client ID (optional)
 - `PANDADOC_CLIENT_SECRET` - PandaDoc OAuth app client secret (optional)
 - `REDIS_URL` - Optional, for SSE session resumability
+- `SENTRY_AUTH_TOKEN` - For Sentry error tracking (optional)
+- `NEXT_PUBLIC_SENTRY_DSN` - Sentry DSN for error tracking (optional)
 
 ### TypeScript Configuration
 
@@ -96,3 +105,5 @@ Required in `.env.local`:
 - Microsoft is the only provider that creates user accounts - all other providers are linked
 - Tools requiring HubSpot/PandaDoc will prompt users to connect via `/connections` page
 - Web sessions and MCP OAuth sessions are separate by design
+- Sentry error tracking is integrated into all MCP tools automatically
+- Tool schemas must be plain objects with Zod validators, not Zod objects (e.g., `{ message: z.string() }` not `z.object({ message: z.string() })`)
