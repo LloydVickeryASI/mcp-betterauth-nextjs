@@ -4,8 +4,9 @@ A Model Context Protocol (MCP) server built with Next.js and Better Auth for OAu
 
 ## Features
 
-- 🔐 OAuth authentication with Better Auth
-- 🚀 MCP server endpoints with both public and secured access
+- 🔐 Microsoft OAuth as primary authentication
+- 🔗 Tool-specific OAuth connections (HubSpot, PandaDoc)
+- 🚀 MCP server endpoints with OAuth protection
 - 📡 Streamable HTTP/SSE support via `mcp-handler`
 - ⚡ Deployed on Vercel with serverless functions
 - 🗄️ SQLite database for development (configurable for production)
@@ -20,6 +21,10 @@ A Model Context Protocol (MCP) server built with Next.js and Better Auth for OAu
   - `search_hubspot_contacts` - Search HubSpot contacts by email (requires HubSpot authentication)
   - `list_pandadoc_documents` - List PandaDoc documents with optional status filter and pagination (requires PandaDoc authentication)
 - **Requires**: OAuth bearer token from Better Auth
+
+### Web Interface
+- `/sign-in` - Sign in with Microsoft account
+- `/connections` - Manage tool integrations (requires Microsoft authentication)
 
 ### OAuth Discovery
 - `/.well-known/oauth-authorization-server` - OAuth metadata
@@ -47,6 +52,9 @@ cp .env.example .env.local
    - Generate a secure `BETTER_AUTH_SECRET`
    - Configure `DATABASE_URL` (SQLite for dev, Postgres/MySQL for production)
    - Set `AUTH_ISSUER` URL
+   - Microsoft OAuth: `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_TENANT_ID`
+   - HubSpot OAuth: `HUBSPOT_CLIENT_ID`, `HUBSPOT_CLIENT_SECRET`
+   - PandaDoc OAuth: `PANDADOC_CLIENT_ID`, `PANDADOC_CLIENT_SECRET`
 
 5. Run the development server:
 ```bash
@@ -90,6 +98,28 @@ vercel
    - `DATABASE_URL` (use Vercel Postgres or similar)
    - `AUTH_ISSUER` (optional, auto-detected)
    - `REDIS_URL` (optional, for SSE resumability)
+   - Microsoft OAuth credentials
+   - HubSpot OAuth credentials (optional, for HubSpot tools)
+   - PandaDoc OAuth credentials (optional, for PandaDoc tools)
+
+## Authentication Architecture
+
+### Primary Authentication (Microsoft)
+- Users must first authenticate with Microsoft to access the MCP server
+- Microsoft is the only provider that creates user accounts
+- All other OAuth providers are linked to the Microsoft account
+
+### Tool-Specific Connections
+- HubSpot and PandaDoc are secondary OAuth connections
+- These connections are managed via the `/connections` page
+- Users must be authenticated with Microsoft before connecting other services
+- Each tool checks for its specific OAuth connection when invoked
+
+### Authentication Flow
+1. **MCP Client**: Authenticate with Microsoft via OAuth flow
+2. **Web Interface**: Sign in with Microsoft at `/sign-in`
+3. **Tool Connections**: Visit `/connections` to link HubSpot/PandaDoc accounts
+4. **Tool Usage**: Tools automatically check for required connections
 
 ## Connecting MCP Clients
 
