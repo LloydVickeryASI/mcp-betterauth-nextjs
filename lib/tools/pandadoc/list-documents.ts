@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { ToolContext } from "../register-tool";
 
-export const listDocumentsSchema = z.object({
+export const listDocumentsSchema = {
   status: z.enum(["draft", "sent", "completed", "expired", "declined", "voided"])
     .optional()
     .describe("Filter documents by status"),
@@ -19,10 +19,17 @@ export const listDocumentsSchema = z.object({
   order_by: z.enum(["name", "-name", "date_created", "-date_created", "date_modified", "-date_modified"])
     .optional()
     .describe("Sort order (prefix with - for descending)")
-});
+};
+
+type ListDocumentsArgs = {
+  status?: "draft" | "sent" | "completed" | "expired" | "declined" | "voided";
+  count?: number;
+  page?: number;
+  order_by?: "name" | "-name" | "date_created" | "-date_created" | "date_modified" | "-date_modified";
+};
 
 export const listDocumentsHandler = async (
-  { status, count = 20, page = 1, order_by }: z.infer<typeof listDocumentsSchema>,
+  { status, count = 20, page = 1, order_by }: ListDocumentsArgs,
   context: ToolContext
 ) => {
   // Check if user has PandaDoc account linked

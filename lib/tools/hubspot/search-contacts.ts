@@ -1,9 +1,9 @@
 import { z } from "zod";
 import type { ToolContext } from "../register-tool";
 
-export const searchContactsSchema = z.object({
+export const searchContactsSchema = {
   query: z.string().describe("The email address to search for (supports partial matches)")
-});
+};
 
 export const searchContactsHandler = async ({ query }: { query: string }, context: ToolContext) => {
   // Validate query

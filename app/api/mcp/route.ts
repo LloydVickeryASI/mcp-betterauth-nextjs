@@ -44,9 +44,9 @@ const handler = withMcpAuth(auth, async (req, session) => {
                 server,
                 "echo",
                 "Echo back a string",
-                z.object({
+                {
                     message: z.string().describe("The message to echo back")
-                }),
+                },
                 async ({ message }) => {
                     return {
                         content: [{ type: "text", text: `Echo: ${message}` }],
@@ -59,7 +59,7 @@ const handler = withMcpAuth(auth, async (req, session) => {
                 server,
                 "get_auth_status",
                 "Get authentication status with user profile",
-                z.object({}),
+                {},
                 async (_, context) => {
                     // Display all available session information
                     const sessionInfo: any = {
