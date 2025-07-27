@@ -1,5 +1,6 @@
 import { z } from "zod";
-import type { ToolContext } from "../register-tool";
+import { ProviderApiHelper } from "../provider-api-helper";
+import type { ProviderToolContext } from "../create-provider-tool";
 
 export const listDocumentsSchema = {
   status: z.enum(["draft", "sent", "completed", "expired", "declined", "voided"])
@@ -28,85 +29,42 @@ type ListDocumentsArgs = {
   order_by?: "name" | "-name" | "date_created" | "-date_created" | "date_modified" | "-date_modified";
 };
 
-export const listDocumentsHandler = async (
+export async function listDocumentsHandler(
   { status, count = 20, page = 1, order_by }: ListDocumentsArgs,
-  context: ToolContext
-) => {
-  // Check if user has PandaDoc account linked
-  const pandadocAccount = context.db.prepare('SELECT * FROM account WHERE userId = ? AND providerId = ?')
-    .get(context.session.userId, 'pandadoc');
-  
-  if (!pandadocAccount || !pandadocAccount.accessToken) {
-    // User needs to authenticate with PandaDoc
-    const connectionsUrl = `${context.auth.options.baseURL}/connections`;
-    return {
-      content: [{
-        type: "text",
-        text: JSON.stringify({
-          authenticated: false,
-          message: "PandaDoc account not connected. Please visit the connections page to link your PandaDoc account.",
-          connectionsUrl: connectionsUrl,
-          provider: "pandadoc"
-        }, null, 2)
-      }],
-    };
-  }
+  context: ProviderToolContext
+) {
+  // Create API helper with context
+  const api = new ProviderApiHelper(context);
   
   // Build query parameters
-  const params = new URLSearchParams({
-    count: count.toString(),
-    page: page.toString()
-  });
+  const params: any = {
+    count: count,
+    page: page
+  };
   
   if (status) {
-    params.append('status', status);
+    params.status = status;
   }
   
   if (order_by) {
-    params.append('order_by', order_by);
+    params.order_by = order_by;
   }
   
   // List documents using PandaDoc API
-  const response = await fetch(`https://api.pandadoc.com/public/v1/documents?${params.toString()}`, {
-    headers: {
-      "Authorization": `Bearer ${pandadocAccount.accessToken}`,
-      "Content-Type": "application/json"
+  const response = await api.get(
+    '/documents',
+    'list_documents',
+    { 
+      query: params,
+      cache: {
+        enabled: true,
+        ttlMs: 300000 // 5 minute cache
+      }
     }
-  });
-  
-  if (!response.ok) {
-    // Token might be expired, provide auth URL
-    if (response.status === 401) {
-      const connectionsUrl = `${context.auth.options.baseURL}/connections`;
-      return {
-        content: [{
-          type: "text",
-          text: JSON.stringify({
-            authenticated: false,
-            message: "PandaDoc token expired. Please reconnect your PandaDoc account on the connections page.",
-            connectionsUrl: connectionsUrl,
-            provider: "pandadoc"
-          }, null, 2)
-        }],
-      };
-    }
-    
-    // Get error details
-    const errorText = await response.text();
-    let errorDetails;
-    try {
-      errorDetails = JSON.parse(errorText);
-    } catch {
-      errorDetails = errorText;
-    }
-    
-    throw new Error(`PandaDoc API error: ${response.status} ${response.statusText} - ${JSON.stringify(errorDetails)}`);
-  }
-  
-  const data = await response.json();
+  );
   
   // Format the response with relevant document information
-  const formattedResults = data.results.map((doc: any) => ({
+  const formattedResults = response.data.results.map((doc: any) => ({
     id: doc.id,
     name: doc.name,
     status: doc.status,
@@ -122,11 +80,11 @@ export const listDocumentsHandler = async (
       text: JSON.stringify({
         authenticated: true,
         results: formattedResults,
-        total_count: data.count,
+        total_count: response.data.count,
         page: page,
         page_size: count,
-        total_pages: Math.ceil(data.count / count)
+        total_pages: Math.ceil(response.data.count / count)
       }, null, 2)
     }],
   };
-};
+}
