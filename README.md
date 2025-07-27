@@ -53,6 +53,24 @@ cp .env.example .env.local
 npm run dev
 ```
 
+### Testing with PandaDoc OAuth
+
+PandaDoc doesn't allow localhost URLs for OAuth. Use ngrok for local testing:
+
+```bash
+# Option 1: Use the automated setup script
+npm run tunnel
+# Then in another terminal:
+npm run dev
+
+# Option 2: Manual ngrok setup
+./start-ngrok.sh
+# Update .env.local with the ngrok URL
+# Then run: npm run dev
+```
+
+See [docs/PANDADOC_SETUP.md](docs/PANDADOC_SETUP.md) for detailed instructions.
+
 ## Deployment
 
 ### Deploy to Vercel
