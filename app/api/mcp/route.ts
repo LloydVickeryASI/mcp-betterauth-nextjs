@@ -162,10 +162,11 @@ const handler = withMcpAuth(auth, async (req, session) => {
                 "List documents from PandaDoc",
                 {
                     status: z.enum(["draft", "sent", "completed", "expired", "declined", "voided"]).optional().describe("Filter documents by status"),
-                    limit: z.number().min(1).max(100).default(20).optional().describe("Number of documents to return (default: 20, max: 100)"),
-                    page: z.number().min(1).default(1).optional().describe("Page number for pagination (default: 1)")
+                    count: z.number().min(1).max(100).default(20).optional().describe("Number of documents to return (default: 20, max: 100)"),
+                    page: z.number().min(1).default(1).optional().describe("Page number for pagination (default: 1)"),
+                    order_by: z.enum(["name", "-name", "date_created", "-date_created", "date_modified", "-date_modified"]).optional().describe("Sort order (prefix with - for descending)")
                 },
-                async ({ status, limit = 20, page = 1 }) => {
+                async ({ status, count = 20, page = 1, order_by }) => {
                     try {
                         // Check if user has PandaDoc account linked
                         const db = auth.options.database as any;
@@ -188,12 +189,16 @@ const handler = withMcpAuth(auth, async (req, session) => {
                         
                         // Build query parameters
                         const params = new URLSearchParams({
-                            limit: limit.toString(),
+                            count: count.toString(),
                             page: page.toString()
                         });
                         
                         if (status) {
                             params.append('status', status);
+                        }
+                        
+                        if (order_by) {
+                            params.append('order_by', order_by);
                         }
                         
                         // List documents using PandaDoc API
@@ -262,10 +267,10 @@ const handler = withMcpAuth(auth, async (req, session) => {
                                 text: JSON.stringify({
                                     authenticated: true,
                                     results: formattedResults,
-                                    count: data.count,
+                                    total_count: data.count,
                                     page: page,
-                                    limit: limit,
-                                    total_pages: Math.ceil(data.count / limit)
+                                    page_size: count,
+                                    total_pages: Math.ceil(data.count / count)
                                 }, null, 2)
                             }],
                         };
@@ -346,7 +351,7 @@ const handler = withMcpAuth(auth, async (req, session) => {
                         description: "Search HubSpot contacts by email (exact match for full emails, partial match for fragments)",
                     },
                     list_pandadoc_documents: {
-                        description: "List PandaDoc documents with optional status filter and pagination",
+                        description: "List PandaDoc documents with optional status filter, pagination (count/page), and ordering",
                     },
                     get_auth_status: {
                         description: "Get authentication status with Microsoft profile information",
