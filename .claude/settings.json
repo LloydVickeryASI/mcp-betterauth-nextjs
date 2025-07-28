@@ -1,0 +1,46 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "filter": "\\.tsx?$|\\.jsx?$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pnpm run typecheck",
+            "timeout": 30,
+            "onFailure": "warn"
+          }
+        ]
+      }
+    ],
+    "PreCommit": [
+      {
+        "type": "command",
+        "command": "pnpm run lint",
+        "timeout": 30,
+        "onFailure": "block"
+      },
+      {
+        "type": "command",
+        "command": "pnpm run typecheck",
+        "timeout": 30,
+        "onFailure": "block"
+      },
+      {
+        "type": "command",
+        "command": "pnpm run build",
+        "timeout": 120,
+        "onFailure": "block"
+      }
+    ]
+  },
+  "toolSettings": {
+    "Write": {
+      "formatOnSave": true
+    },
+    "Edit": {
+      "formatOnSave": true
+    }
+  }
+}

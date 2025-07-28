@@ -11,7 +11,7 @@ pnpm install
 # Run development server
 pnpm run dev
 
-# Build for production (always run before pushing to git)
+# Build for production
 pnpm run build
 
 # Start production server
@@ -23,6 +23,13 @@ pnpm run lint
 # Run TypeScript type checking
 pnpm run typecheck
 ```
+
+## Claude Code Hooks
+
+This project has automated quality checks configured in `.claude/settings.json`:
+- **Type checking** runs automatically after editing TypeScript/JavaScript files
+- **Linting, type checking, and build** run automatically before commits
+- Commit is blocked if any of these checks fail
 
 ## Package Manager
 
@@ -221,7 +228,6 @@ For testing the MCP server without bearer token authentication, you can enable n
 
 ## Important Notes
 
-- Always build before pushing to git
 - The secured MCP endpoint verifies tokens using Better Auth's `withMcpAuth` middleware
 - MCP handlers use `mcp-handler` package for Vercel deployment compatibility
 - Microsoft is the only provider that creates user accounts - all other providers are linked
