@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { registerTool, type ToolContext } from "./register-tool";
 import { isProviderConnected } from "@/lib/external-api-helpers";
-import { getProviderConfig, hasSystemApiKey } from "@/lib/providers/config";
+import { getProviderConfig, hasSystemApiKey, type ProviderConfig } from "@/lib/providers/config";
 
 export type AuthMethod = 'oauth' | 'system' | 'auto';
 
@@ -68,27 +68,14 @@ export function createProviderTool<TArgs = any>(
     }
     
     // Handle authentication failure
-    if (!connectionStatus.connected) {
-      let message: string;
-      const connectionsUrl = `${context.auth.options.baseURL}/connections`;
+    if (!connectionStatus.connected || !actualAuthMethod) {
+      const errorMessage = generateAuthErrorMessage(
+        config.provider,
+        authMethod,
+        providerConfig
+      );
       
-      if (authMethod === 'oauth') {
-        message = `${capitalizeProvider(config.provider)} account not connected. Please visit the connections page to link your ${capitalizeProvider(config.provider)} account.`;
-      } else if (authMethod === 'system') {
-        message = `System API key for ${capitalizeProvider(config.provider)} not configured. Please contact your administrator.`;
-      } else {
-        // Auto mode - provide more detailed message
-        const hasOAuth = providerConfig.authMethods.oauth;
-        const hasSystemKey = providerConfig.authMethods.systemApiKey;
-        
-        if (hasOAuth && !hasSystemKey) {
-          message = `${capitalizeProvider(config.provider)} account not connected. Please visit the connections page to link your ${capitalizeProvider(config.provider)} account.`;
-        } else if (!hasOAuth && hasSystemKey) {
-          message = `System API key for ${capitalizeProvider(config.provider)} not configured. Please contact your administrator.`;
-        } else {
-          message = `${capitalizeProvider(config.provider)} authentication not available. You can either connect your account on the connections page or contact your administrator to configure a system API key.`;
-        }
-      }
+      const connectionsUrl = `${context.auth.options.baseURL}/connections`;
       
       return {
         content: [{
@@ -96,7 +83,7 @@ export function createProviderTool<TArgs = any>(
           text: JSON.stringify({
             error: true,
             authenticated: false,
-            message,
+            message: errorMessage,
             connectionsUrl: authMethod !== 'system' ? connectionsUrl : undefined,
             provider: config.provider,
             authMethod: authMethod
@@ -111,7 +98,7 @@ export function createProviderTool<TArgs = any>(
       ...context,
       accountId: connectionStatus.accountId,
       provider: config.provider,
-      authMethod: actualAuthMethod!
+      authMethod: actualAuthMethod
     };
     
     try {
@@ -165,4 +152,30 @@ function capitalizeProvider(provider: string): string {
     slack: "Slack",
   };
   return providerNames[provider.toLowerCase()] || provider;
+}
+
+function generateAuthErrorMessage(
+  provider: string,
+  authMethod: AuthMethod,
+  providerConfig: ProviderConfig
+): string {
+  const providerName = capitalizeProvider(provider);
+  
+  if (authMethod === 'oauth') {
+    return `${providerName} account not connected. Please visit the connections page to link your ${providerName} account.`;
+  } else if (authMethod === 'system') {
+    return `System API key for ${providerName} not configured. Please contact your administrator.`;
+  } else {
+    // Auto mode - provide more detailed message
+    const hasOAuth = providerConfig.authMethods.oauth;
+    const hasSystemKey = providerConfig.authMethods.systemApiKey;
+    
+    if (hasOAuth && !hasSystemKey) {
+      return `${providerName} account not connected. Please visit the connections page to link your ${providerName} account.`;
+    } else if (!hasOAuth && hasSystemKey) {
+      return `System API key for ${providerName} not configured. Please contact your administrator.`;
+    } else {
+      return `${providerName} authentication not available. You can either connect your account on the connections page or contact your administrator to configure a system API key.`;
+    }
+  }
 }

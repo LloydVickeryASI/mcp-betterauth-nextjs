@@ -7,7 +7,8 @@ import { circuitBreakerManager, providerCircuitConfigs } from './circuit-breaker
 import { cacheManager, CacheKeyBuilder } from './cache';
 import { getProviderConfig, formatApiKeyHeader, getSystemApiKey } from '@/lib/providers/config';
 
-// Use provider configs from auth.ts instead of duplicating
+// Legacy provider endpoints for backward compatibility
+// New providers should be defined in /lib/providers/config.ts
 const providerEndpoints: Record<string, { baseUrl: string; version?: string }> = {
   hubspot: {
     baseUrl: 'https://api.hubapi.com/crm/v3',

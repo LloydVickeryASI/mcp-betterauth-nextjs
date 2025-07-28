@@ -116,6 +116,8 @@ export function hasSystemApiKey(provider: string): boolean {
   if (!config?.authMethods.systemApiKey) return false;
   
   const envVar = config.authMethods.systemApiKey.envVar;
+  if (!envVar) return false;
+  
   return !!process.env[envVar];
 }
 
@@ -123,7 +125,10 @@ export function getSystemApiKey(provider: string): string | undefined {
   const config = getProviderConfig(provider);
   if (!config?.authMethods.systemApiKey) return undefined;
   
-  return process.env[config.authMethods.systemApiKey.envVar];
+  const envVar = config.authMethods.systemApiKey.envVar;
+  if (!envVar) return undefined;
+  
+  return process.env[envVar];
 }
 
 export function formatApiKeyHeader(provider: string, apiKey: string): Record<string, string> {
