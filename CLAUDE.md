@@ -96,6 +96,7 @@ Required in `.env.local`:
 - `REDIS_URL` - Optional, for SSE session resumability
 - `SENTRY_AUTH_TOKEN` - For Sentry error tracking (optional)
 - `NEXT_PUBLIC_SENTRY_DSN` - Sentry DSN for error tracking (optional)
+- `NO_AUTH` - Set to `true` to enable no-auth mode for testing (development only)
 
 ### TypeScript Configuration
 
@@ -146,6 +147,21 @@ createProviderTool(server, {
 });
 ```
 
+## No-Auth Mode (Development Only)
+
+For testing the MCP server without bearer token authentication, you can enable no-auth mode:
+
+1. Set `NO_AUTH=true` in your `.env.local` file
+2. Ensure the test user `lvickery@asi.co.nz` exists in your database
+3. The test user should have active OAuth connections for HubSpot/PandaDoc if you want to test those tools
+
+**Important:**
+- No-auth mode only works in development environment (`NODE_ENV=development`)
+- It bypasses bearer token verification but still maintains tool authentication
+- The server automatically authenticates as the test user
+- Response headers include `X-No-Auth-Mode: true` and `X-Test-User: lvickery@asi.co.nz`
+- Console warnings will appear when running in this mode
+
 ## Important Notes
 
 - Always build before pushing to git
@@ -156,3 +172,74 @@ createProviderTool(server, {
 - Web sessions and MCP OAuth sessions are separate by design
 - Sentry error tracking is integrated into all MCP tools automatically
 - Tool schemas must be plain objects with Zod validators, not Zod objects (e.g., `{ message: z.string() }` not `z.object({ message: z.string() })`)
+
+## Testing Patterns
+
+### Live Testing with MCP Inspector
+
+Before writing formal tests, use MCP Inspector to verify functionality:
+
+1. **Enable no-auth mode for easier testing:**
+   ```bash
+   # Add to .env.local
+   NO_AUTH=true
+   
+   # Start the dev server
+   pnpm run dev
+   ```
+
+2. **Test with MCP Inspector CLI:**
+   ```bash
+   # List available tools
+   npx @modelcontextprotocol/inspector --cli http://localhost:3000/api/mcp --transport http --method tools/list
+   
+   # Call a simple tool
+   npx @modelcontextprotocol/inspector --cli http://localhost:3000/api/mcp --transport http --method tools/call --tool-name echo --tool-arg message="Hello world"
+   
+   # Get authentication status
+   npx @modelcontextprotocol/inspector --cli http://localhost:3000/api/mcp --transport http --method tools/call --tool-name get_auth_status
+   
+   # Test OAuth-required tools (will show connection status)
+   npx @modelcontextprotocol/inspector --cli http://localhost:3000/api/mcp --transport http --method tools/call --tool-name search_hubspot_contacts --tool-arg query="test@example.com"
+   ```
+
+3. **Verify expected behaviors:**
+   - Tools list without authentication in no-auth mode
+   - Simple tools execute successfully
+   - OAuth-required tools properly check for valid connections
+   - Error messages guide users to connect accounts when needed
+
+### Testing External API Access
+
+When developing or debugging integrations, you can extract OAuth tokens from the BetterAuth database to test API calls directly:
+
+```bash
+# 1. Find user ID by email
+sqlite3 sqlite.db "SELECT id, email FROM user WHERE email = 'user@example.com';"
+
+# 2. Extract access token for a specific provider (e.g., hubspot, pandadoc)
+sqlite3 sqlite.db "SELECT accessToken, accessTokenExpiresAt FROM account WHERE userId = 'USER_ID' AND providerId = 'PROVIDER_ID';"
+
+# 3. Test API call with the token
+curl -X GET "https://api.hubapi.com/account-info/v3/details" \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -H "Content-Type: application/json" | jq .
+
+# Example: Search HubSpot contacts
+curl -X POST "https://api.hubapi.com/crm/v3/objects/contacts/search" \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "filterGroups": [{
+      "filters": [{
+        "propertyName": "email",
+        "operator": "EQ",
+        "value": "user@example.com"
+      }]
+    }],
+    "properties": ["email", "firstname", "lastname", "company"],
+    "limit": 10
+  }' | jq .
+```
+
+Note: If the token has expired, you'll need to refresh it through the `/connections` page or use the refresh token if available.
