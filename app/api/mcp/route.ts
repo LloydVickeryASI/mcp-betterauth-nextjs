@@ -5,8 +5,9 @@ import { z } from "zod";
 import { registerTool } from "@/lib/tools/register-tool";
 import { registerHubSpotTools } from "@/lib/tools/hubspot";
 import { registerPandaDocTools } from "@/lib/tools/pandadoc";
+import { isNoAuthMode, TEST_USER_EMAIL } from "@/lib/auth-mode";
 
-const handler = withMcpAuth(auth, async (req, session) => {
+const mcpHandlerFunction = async (req: Request, session: any) => {
     // The session from withMcpAuth contains the MCP access token session
     console.log("MCP Session:", JSON.stringify(session, null, 2));
     
@@ -125,6 +126,50 @@ const handler = withMcpAuth(auth, async (req, session) => {
             maxDuration: 60,
         },
     )(req);
-});
+};
+
+// Create the handler with conditional authentication
+const handler = isNoAuthMode() 
+    ? async (req: Request) => {
+        // In no-auth mode, load the test user from the database
+        const db = auth.options.database as any;
+        
+        // Add warning headers
+        const response = new Response(null, { status: 200 });
+        response.headers.set('X-No-Auth-Mode', 'true');
+        response.headers.set('X-Test-User', TEST_USER_EMAIL);
+        
+        // Find the test user
+        const user = db.prepare('SELECT * FROM user WHERE email = ?').get(TEST_USER_EMAIL);
+        
+        if (!user) {
+            return new Response(
+                JSON.stringify({ 
+                    error: `Test user ${TEST_USER_EMAIL} not found in database. Please ensure this user exists with active OAuth connections.` 
+                }), 
+                { 
+                    status: 500,
+                    headers: { 'Content-Type': 'application/json' }
+                }
+            );
+        }
+        
+        // Create a mock session similar to what withMcpAuth would provide
+        const mockSession = {
+            userId: user.id,
+            user: {
+                id: user.id,
+                email: user.email,
+                name: user.name,
+                image: user.image,
+            }
+        };
+        
+        console.warn('🚨 NO_AUTH MODE: Auto-authenticating as', TEST_USER_EMAIL);
+        
+        // Call the handler with the mock session
+        return mcpHandlerFunction(req, mockSession);
+    }
+    : withMcpAuth(auth, mcpHandlerFunction);
 
 export { handler as GET, handler as POST, handler as DELETE };
