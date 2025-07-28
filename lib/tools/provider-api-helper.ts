@@ -19,7 +19,10 @@ export class ProviderApiHelper {
       this.context.accountId,
       path,
       operation,
-      options
+      {
+        ...options,
+        authMethod: this.context.authMethod
+      }
     );
   }
   
@@ -36,7 +39,10 @@ export class ProviderApiHelper {
       path,
       operation,
       body,
-      options
+      {
+        ...options,
+        authMethod: this.context.authMethod
+      }
     );
   }
   
@@ -52,7 +58,7 @@ export class ProviderApiHelper {
       this.context.accountId,
       path,
       operation,
-      { ...options, method: 'PUT', body }
+      { ...options, method: 'PUT', body, authMethod: this.context.authMethod }
     );
   }
   
@@ -67,7 +73,7 @@ export class ProviderApiHelper {
       this.context.accountId,
       path,
       operation,
-      { ...options, method: 'DELETE' }
+      { ...options, method: 'DELETE', authMethod: this.context.authMethod }
     );
   }
   
@@ -83,7 +89,7 @@ export class ProviderApiHelper {
       this.context.accountId,
       path,
       operation,
-      { ...options, method: 'PATCH', body }
+      { ...options, method: 'PATCH', body, authMethod: this.context.authMethod }
     );
   }
 }

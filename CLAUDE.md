@@ -46,10 +46,17 @@ This is a Next.js 15 application that implements an MCP (Model Context Protocol)
      - Tools: 
        - `echo` - Echoes back a string message
        - `get_auth_status` - Returns authentication status with full Microsoft profile information
-       - `search_hubspot_contacts` - Search HubSpot contacts (requires HubSpot connection)
-       - `list_pandadoc_documents` - List PandaDoc documents (requires PandaDoc connection)
+       - **OAuth-based tools:**
+         - `search_hubspot_contacts` - Search HubSpot contacts (requires HubSpot connection)
+         - `list_pandadoc_documents` - List PandaDoc documents (requires PandaDoc connection)
+       - **System API key-based tools:**
+         - `openai_generate_text` - Generate text using OpenAI GPT models
+         - `openai_list_models` - List available OpenAI models
+         - `stripe_list_customers` - List Stripe customers
+         - `stripe_get_balance` - Get Stripe account balance
+         - `stripe_list_charges` - List recent Stripe charges
      - Uses `withMcpAuth` wrapper for token verification
-     - Tools check for specific OAuth connections before executing
+     - Tools check for specific OAuth connections or system API keys before executing
      - All tools have automatic Sentry error tracking with user context
 
 3. **OAuth Discovery**: Well-known endpoints for OAuth metadata
@@ -72,12 +79,17 @@ This is a Next.js 15 application that implements an MCP (Model Context Protocol)
   - `/auth-client.ts` - Better Auth client for React components
   - `/sentry-error-handler.ts` - Centralized Sentry error handling
   - `/external-api-helpers` - Reusable API client with rate limiting, caching, and circuit breakers
+  - `/providers` - Provider configuration and validation
+    - `/config.ts` - Provider configuration with auth methods and API settings
+    - `/validate.ts` - System API key validation helpers
   - `/tools` - MCP tool implementations
     - `/register-tool.ts` - Tool registration helper with Sentry integration
     - `/create-provider-tool.ts` - Higher-order function for creating provider-specific tools
     - `/provider-api-helper.ts` - Simplified API helper for provider tools
-    - `/hubspot` - HubSpot integration tools
-    - `/pandadoc` - PandaDoc integration tools
+    - `/hubspot` - HubSpot integration tools (OAuth)
+    - `/pandadoc` - PandaDoc integration tools (OAuth)
+    - `/openai` - OpenAI integration tools (System API key)
+    - `/stripe` - Stripe integration tools (System API key)
 - Database: SQLite (`sqlite.db`) for local dev, configurable for production
 
 ### Environment Variables
@@ -98,6 +110,15 @@ Required in `.env.local`:
 - `NEXT_PUBLIC_SENTRY_DSN` - Sentry DSN for error tracking (optional)
 - `NO_AUTH` - Set to `true` to enable no-auth mode for testing (development only)
 
+System API Keys (optional):
+- `OPENAI_API_KEY` - OpenAI API key for GPT models
+- `ANTHROPIC_API_KEY` - Anthropic API key for Claude models
+- `STRIPE_API_KEY` - Stripe API key for payment operations
+- `SENDGRID_API_KEY` - SendGrid API key for email services
+- `SLACK_API_KEY` - Slack API key for Slack integration
+- `HUBSPOT_API_KEY` - HubSpot API key (alternative to OAuth)
+- `PANDADOC_API_KEY` - PandaDoc API key (alternative to OAuth)
+
 ### TypeScript Configuration
 
 - Strict mode enabled
@@ -106,10 +127,11 @@ Required in `.env.local`:
 
 ### Tool Architecture
 
-The project uses an elegant abstraction for provider-specific tools:
+The project uses an elegant abstraction for provider-specific tools that supports both OAuth and system API keys:
 
 1. **`createProviderTool`** - Higher-order function that:
-   - Automatically checks provider authentication
+   - Automatically checks provider authentication (OAuth or system API key)
+   - Supports multiple auth methods: `oauth`, `system`, or `auto`
    - Handles token expiration gracefully
    - Provides consistent error responses
    - Wraps tools with provider context
@@ -118,19 +140,27 @@ The project uses an elegant abstraction for provider-specific tools:
    - Automatically including userId, accountId, and provider
    - Providing typed methods for all HTTP verbs
    - Integrating with caching, rate limiting, and circuit breakers
+   - Handling both OAuth tokens and system API keys
 
-3. **Benefits**:
+3. **Provider Configuration** (`/lib/providers/config.ts`):
+   - Centralized provider settings
+   - Defines auth methods, base URLs, and header formats
+   - Supports OAuth, system API keys, or both
+
+4. **Benefits**:
    - Tools focus only on business logic (~30 lines vs ~110 lines)
    - Authentication errors handled uniformly
    - Easy to add new tools and providers
+   - Seamless support for both OAuth and API keys
    - Full TypeScript support throughout
 
-Example of creating a new tool:
+Example of creating a new OAuth tool:
 ```typescript
 createProviderTool(server, {
   name: "tool_name",
   description: "Tool description",
-  provider: "hubspot", // or "pandadoc"
+  provider: "hubspot",
+  authMethod: "oauth", // Default for existing providers
   schema: {
     param: z.string().describe("Parameter description")
   },
@@ -141,6 +171,33 @@ createProviderTool(server, {
       content: [{
         type: "text",
         text: JSON.stringify(response.data, null, 2)
+      }]
+    };
+  }
+});
+```
+
+Example of creating a system API key tool:
+```typescript
+createProviderTool(server, {
+  name: "openai_generate",
+  description: "Generate text with OpenAI",
+  provider: "openai",
+  authMethod: "system", // Uses system API key
+  requiresUserAuth: false, // No user connection needed
+  schema: {
+    prompt: z.string().describe("The prompt")
+  },
+  handler: async ({ prompt }, context) => {
+    const api = new ProviderApiHelper(context);
+    const response = await api.post('/chat/completions', 'generate', {
+      model: "gpt-3.5-turbo",
+      messages: [{ role: "user", content: prompt }]
+    });
+    return {
+      content: [{
+        type: "text",
+        text: response.data.choices[0].message.content
       }]
     };
   }
