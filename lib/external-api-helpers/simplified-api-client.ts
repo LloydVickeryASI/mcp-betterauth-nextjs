@@ -5,8 +5,10 @@ import { ApiError, mapProviderError, providerErrorMappers, ApiErrorCode } from '
 import { apiLogger } from './logging';
 import { circuitBreakerManager, providerCircuitConfigs } from './circuit-breaker';
 import { cacheManager, CacheKeyBuilder } from './cache';
+import { getProviderConfig, formatApiKeyHeader, getSystemApiKey } from '@/lib/providers/config';
 
-// Use provider configs from auth.ts instead of duplicating
+// Legacy provider endpoints for backward compatibility
+// New providers should be defined in /lib/providers/config.ts
 const providerEndpoints: Record<string, { baseUrl: string; version?: string }> = {
   hubspot: {
     baseUrl: 'https://api.hubapi.com/crm/v3',
@@ -31,6 +33,7 @@ export interface ApiRequestOptions {
   skipRateLimit?: boolean;
   skipRetry?: boolean;
   skipCircuitBreaker?: boolean;
+  authMethod?: 'oauth' | 'system';
 }
 
 export interface ApiResponse<T = any> {
@@ -49,14 +52,31 @@ export class SimplifiedApiClient {
     operation: string,
     options: ApiRequestOptions = {}
   ): Promise<ApiResponse<T>> {
-    const endpoint = providerEndpoints[provider];
-    if (!endpoint) {
-      throw new Error(`Unknown provider: ${provider}`);
+    // Try to get from provider config first
+    const providerConfig = getProviderConfig(provider);
+    let baseUrl: string;
+    let version: string | undefined;
+    
+    if (providerConfig) {
+      baseUrl = providerConfig.baseUrl;
+      // Extract version from base URL if it ends with a version pattern
+      const versionMatch = baseUrl.match(/\/v\d+$/);
+      if (versionMatch) {
+        version = undefined; // Version is already in base URL
+      }
+    } else {
+      // Fallback to legacy endpoints
+      const endpoint = providerEndpoints[provider];
+      if (!endpoint) {
+        throw new Error(`Unknown provider: ${provider}`);
+      }
+      baseUrl = endpoint.baseUrl;
+      version = endpoint.version;
     }
     
     // Build URL
-    const basePath = endpoint.version ? `/${endpoint.version}` : '';
-    const url = `${endpoint.baseUrl}${basePath}${path}`;
+    const basePath = version ? `/${version}` : '';
+    const url = `${baseUrl}${basePath}${path}`;
     
     // Build cache key if caching is enabled
     let cacheKey: string | undefined;
@@ -85,31 +105,53 @@ export class SimplifiedApiClient {
     
     // Create the request function
     const makeRequest = async (): Promise<ApiResponse<T>> => {
-      // Get access token from the database
-      // Note: Better Auth will handle refresh automatically when we call their API endpoints
-      const db = auth.options.database as any;
-      const account = accountId
-        ? db.prepare('SELECT * FROM account WHERE id = ?').get(accountId)
-        : db.prepare('SELECT * FROM account WHERE userId = ? AND providerId = ?').get(userId, provider);
+      let authHeaders: Record<string, string> = {};
       
-      if (!account?.accessToken) {
-        throw new ApiError(
-          ApiErrorCode.UNAUTHORIZED,
-          'No access token available',
-          {
-            provider,
-            operation,
-            originalError: null,
-            retryable: false,
-          }
-        );
+      // Determine authentication method
+      if (options.authMethod === 'system') {
+        // Use system API key
+        const systemApiKey = getSystemApiKey(provider);
+        if (!systemApiKey) {
+          throw new ApiError(
+            ApiErrorCode.UNAUTHORIZED,
+            'System API key not configured',
+            {
+              provider,
+              operation,
+              originalError: null,
+              retryable: false,
+            }
+          );
+        }
+        authHeaders = formatApiKeyHeader(provider, systemApiKey);
+      } else {
+        // Default to OAuth
+        // Get access token from the database
+        // Note: Better Auth will handle refresh automatically when we call their API endpoints
+        const db = auth.options.database as any;
+        const account = accountId
+          ? db.prepare('SELECT * FROM account WHERE id = ?').get(accountId)
+          : db.prepare('SELECT * FROM account WHERE userId = ? AND providerId = ?').get(userId, provider);
+        
+        if (!account?.accessToken) {
+          throw new ApiError(
+            ApiErrorCode.UNAUTHORIZED,
+            'No access token available',
+            {
+              provider,
+              operation,
+              originalError: null,
+              retryable: false,
+            }
+          );
+        }
+        
+        authHeaders = { 'Authorization': `Bearer ${account.accessToken}` };
       }
-      
-      const accessToken = account.accessToken;
       
       // Build headers
       const headers = {
-        'Authorization': `Bearer ${accessToken}`,
+        ...authHeaders,
         'Content-Type': 'application/json',
         ...options.headers,
       };
@@ -296,8 +338,9 @@ export class SimplifiedApiClient {
 // Helper to check if a provider is connected
 export async function isProviderConnected(
   userId: string,
-  provider: string
-): Promise<{ connected: boolean; accountId?: string }> {
+  provider: string,
+  options?: { allowSystemKey?: boolean }
+): Promise<{ connected: boolean; accountId?: string; authMethod?: 'oauth' | 'system' }> {
   try {
     // Check if user has an account for this provider
     const db = auth.options.database as any;
@@ -305,19 +348,31 @@ export async function isProviderConnected(
       .prepare('SELECT * FROM account WHERE userId = ? AND providerId = ?')
       .get(userId, provider);
     
-    if (!account?.accessToken) {
-      return { connected: false };
+    if (account?.accessToken) {
+      // Check if token exists (Better Auth will handle refresh when needed)
+      // TODO: In the future, we could check accessTokenExpiresAt to see if it's expired
+      // and preemptively mark as not connected, but for now we'll let the API call fail
+      // and handle the 401 response
+      
+      return { 
+        connected: true,
+        accountId: account.id,
+        authMethod: 'oauth'
+      };
     }
     
-    // Check if token exists (Better Auth will handle refresh when needed)
-    // TODO: In the future, we could check accessTokenExpiresAt to see if it's expired
-    // and preemptively mark as not connected, but for now we'll let the API call fail
-    // and handle the 401 response
+    // Check system API key if allowed
+    if (options?.allowSystemKey) {
+      const systemApiKey = getSystemApiKey(provider);
+      if (systemApiKey) {
+        return { 
+          connected: true,
+          authMethod: 'system'
+        };
+      }
+    }
     
-    return { 
-      connected: true,
-      accountId: account.id
-    };
+    return { connected: false };
   } catch {
     return { connected: false };
   }

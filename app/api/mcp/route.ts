@@ -5,7 +5,17 @@ import { z } from "zod";
 import { registerTool } from "@/lib/tools/register-tool";
 import { registerHubSpotTools } from "@/lib/tools/hubspot";
 import { registerPandaDocTools } from "@/lib/tools/pandadoc";
+import { registerOpenAITools } from "@/lib/tools/openai";
+import { registerStripeTools } from "@/lib/tools/stripe";
 import { isNoAuthMode, TEST_USER_EMAIL } from "@/lib/auth-mode";
+import { logSystemApiKeyStatus } from "@/lib/providers/validate";
+
+// Log system API key status on startup (only once)
+let hasLoggedApiKeyStatus = false;
+if (!hasLoggedApiKeyStatus && process.env.NODE_ENV === 'development') {
+    logSystemApiKeyStatus();
+    hasLoggedApiKeyStatus = true;
+}
 
 const mcpHandlerFunction = async (req: Request, session: any) => {
     // The session from withMcpAuth contains the MCP access token session
@@ -97,9 +107,13 @@ const mcpHandlerFunction = async (req: Request, session: any) => {
                 }
             );
             
-            // Register integration-specific tools
+            // Register OAuth-based tools
             registerHubSpotTools(server);
             registerPandaDocTools(server);
+            
+            // Register system API key-based tools
+            registerOpenAITools(server);
+            registerStripeTools(server);
         },
         {
             capabilities: {
