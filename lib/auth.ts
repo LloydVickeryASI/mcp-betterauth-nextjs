@@ -2,10 +2,12 @@ import { betterAuth } from "better-auth";
 import { mcp } from "better-auth/plugins";
 import { genericOAuth } from "better-auth/plugins";
 import { nextCookies } from "better-auth/next-js";
-import Database from "better-sqlite3";
+import { Pool } from "@neondatabase/serverless";
 
 export const auth = betterAuth({
-  database: new Database("./sqlite.db"),
+  database: new Pool({
+    connectionString: process.env.DATABASE_URL!,
+  }),
   basePath: "/api/auth",
   baseURL: process.env.AUTH_ISSUER || "http://localhost:3000",
   emailAndPassword: {

@@ -9,6 +9,8 @@ import { registerOpenAITools } from "@/lib/tools/openai";
 import { registerStripeTools } from "@/lib/tools/stripe";
 import { isNoAuthMode, TEST_USER_EMAIL } from "@/lib/auth-mode";
 import { logSystemApiKeyStatus } from "@/lib/providers/validate";
+import { getUserById, getAccountByUserIdAndProvider, getUserByEmail, getSessionByUserId } from "@/lib/db-queries";
+import { Pool } from "@neondatabase/serverless";
 
 // Log system API key status on startup (only once)
 let hasLoggedApiKeyStatus = false;
@@ -22,14 +24,14 @@ const mcpHandlerFunction = async (req: Request, session: any) => {
     console.log("MCP Session:", JSON.stringify(session, null, 2));
     
     return createMcpHandler(
-        (server) => {
+        async (server) => {
             // Get database instance
-            const db = auth.options.database as any;
+            const db = auth.options.database as Pool;
             
             // Try to get user profile information
             let userProfile;
             try {
-                const user = db.prepare('SELECT * FROM user WHERE id = ?').get(session.userId);
+                const user = await getUserById(db, session.userId);
                 if (user) {
                     userProfile = {
                         id: user.id,
@@ -85,8 +87,7 @@ const mcpHandlerFunction = async (req: Request, session: any) => {
                     
                     // Also try to get the account information for Microsoft provider details
                     try {
-                        const account = context.db.prepare('SELECT * FROM account WHERE userId = ? AND providerId = ?')
-                            .get(context.session.userId, 'microsoft');
+                        const account = await getAccountByUserIdAndProvider(context.db, context.session.userId, 'microsoft');
                         if (account) {
                             sessionInfo.providerAccount = {
                                 providerId: account.providerId,
@@ -146,7 +147,7 @@ const mcpHandlerFunction = async (req: Request, session: any) => {
 const handler = isNoAuthMode() 
     ? async (req: Request) => {
         // In no-auth mode, load the test user from the database
-        const db = auth.options.database as any;
+        const db = auth.options.database as Pool;
         
         // Add warning headers
         const response = new Response(null, { status: 200 });
@@ -154,7 +155,7 @@ const handler = isNoAuthMode()
         response.headers.set('X-Test-User', TEST_USER_EMAIL);
         
         // Find the test user
-        const user = db.prepare('SELECT * FROM user WHERE email = ?').get(TEST_USER_EMAIL);
+        const user = await getUserByEmail(db, TEST_USER_EMAIL);
         
         if (!user) {
             return new Response(
