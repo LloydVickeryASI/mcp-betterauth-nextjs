@@ -44,7 +44,7 @@ This is a Next.js 15 application that implements an MCP (Model Context Protocol)
 1. **Authentication**: Better Auth (`/lib/auth.ts`) with multi-provider OAuth
    - **Primary**: Microsoft OAuth for main authentication
    - **Secondary**: HubSpot and PandaDoc for tool-specific connections
-   - Uses SQLite database for development
+   - Uses PostgreSQL database with Neon serverless driver
    - Sign-in page at `/sign-in` (Microsoft only)
    - Connections page at `/connections` for managing tool integrations
 
@@ -84,6 +84,7 @@ This is a Next.js 15 application that implements an MCP (Model Context Protocol)
 - `/lib` - Library code
   - `/auth.ts` - Better Auth configuration with all OAuth providers
   - `/auth-client.ts` - Better Auth client for React components
+  - `/db-queries.ts` - PostgreSQL query helpers for database operations
   - `/sentry-error-handler.ts` - Centralized Sentry error handling
   - `/external-api-helpers` - Reusable API client with rate limiting, caching, and circuit breakers
   - `/providers` - Provider configuration and validation
@@ -97,13 +98,21 @@ This is a Next.js 15 application that implements an MCP (Model Context Protocol)
     - `/pandadoc` - PandaDoc integration tools (OAuth)
     - `/openai` - OpenAI integration tools (System API key)
     - `/stripe` - Stripe integration tools (System API key)
-- Database: SQLite (`sqlite.db`) for local dev, configurable for production
+- Database: PostgreSQL (Neon serverless driver for Vercel deployment)
+
+### Database Setup
+
+This project uses PostgreSQL with the Neon serverless driver for optimal performance on Vercel:
+
+1. **Create a Neon database** at [neon.tech](https://neon.tech) or use Vercel Postgres
+2. **Copy the connection string** to your `.env.local` as `DATABASE_URL`
+3. **Better Auth will automatically create tables** on first run
 
 ### Environment Variables
 
 Required in `.env.local`:
 - `BETTER_AUTH_SECRET` - Secure secret key for auth
-- `DATABASE_URL` - Database connection (SQLite for dev)
+- `DATABASE_URL` - PostgreSQL connection string (Neon or Vercel Postgres)
 - `AUTH_ISSUER` - Base URL for auth (auto-detected on Vercel)
 - `MICROSOFT_CLIENT_ID` - Microsoft OAuth app client ID
 - `MICROSOFT_CLIENT_SECRET` - Microsoft OAuth app client secret
@@ -277,11 +286,12 @@ Before writing formal tests, use MCP Inspector to verify functionality:
 When developing or debugging integrations, you can extract OAuth tokens from the BetterAuth database to test API calls directly:
 
 ```bash
+# Using psql with your DATABASE_URL connection string
 # 1. Find user ID by email
-sqlite3 sqlite.db "SELECT id, email FROM user WHERE email = 'user@example.com';"
+psql $DATABASE_URL -c "SELECT id, email FROM \"user\" WHERE email = 'user@example.com';"
 
 # 2. Extract access token for a specific provider (e.g., hubspot, pandadoc)
-sqlite3 sqlite.db "SELECT accessToken, accessTokenExpiresAt FROM account WHERE userId = 'USER_ID' AND providerId = 'PROVIDER_ID';"
+psql $DATABASE_URL -c "SELECT \"accessToken\", \"accessTokenExpiresAt\" FROM account WHERE \"userId\" = 'USER_ID' AND \"providerId\" = 'PROVIDER_ID';"
 
 # 3. Test API call with the token
 curl -X GET "https://api.hubapi.com/account-info/v3/details" \
