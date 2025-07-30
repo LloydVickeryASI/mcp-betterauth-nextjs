@@ -6,7 +6,7 @@ import { Pool } from "@neondatabase/serverless";
 
 export const createUpdatePurchaseOrderSchema = {
   purchaseOrderId: z.string().optional().describe("The ID of an existing purchase order to update. If not provided, a new purchase order will be created"),
-  supplierName: z.string().describe("The name of the supplier/contact for the purchase order"),
+  contactId: z.string().describe("The Contact ID of the supplier (use search_xero_contacts to find contact IDs)"),
   date: z.string().describe("The date of the purchase order in YYYY-MM-DD format"),
   deliveryDate: z.string().optional().describe("The expected delivery date in YYYY-MM-DD format"),
   reference: z.string().optional().describe("Reference number or code for the purchase order"),
@@ -29,13 +29,13 @@ export async function createUpdatePurchaseOrderHandler(
   context: ProviderToolContext
 ) {
   // Validate required fields
-  if (!params.supplierName?.trim()) {
+  if (!params.contactId?.trim()) {
     return {
       content: [{
         type: "text",
         text: JSON.stringify({
           error: true,
-          message: "Supplier name is required"
+          message: "Contact ID is required. Use search_xero_contacts to find contact IDs."
         }, null, 2)
       }],
     };
@@ -77,7 +77,7 @@ export async function createUpdatePurchaseOrderHandler(
   // Build the purchase order payload
   const purchaseOrderPayload: any = {
     Contact: {
-      Name: params.supplierName
+      ContactID: params.contactId
     },
     Date: params.date,
     LineItems: params.lineItems.map(item => ({
@@ -148,7 +148,8 @@ export async function createUpdatePurchaseOrderHandler(
           purchaseOrder: {
             purchaseOrderID: purchaseOrder.PurchaseOrderID,
             purchaseOrderNumber: purchaseOrder.PurchaseOrderNumber,
-            supplierName: purchaseOrder.Contact?.Name,
+            contactId: purchaseOrder.Contact?.ContactID,
+            contactName: purchaseOrder.Contact?.Name,
             date: purchaseOrder.Date,
             deliveryDate: purchaseOrder.DeliveryDate,
             reference: purchaseOrder.Reference,
