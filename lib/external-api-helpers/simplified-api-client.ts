@@ -9,6 +9,7 @@ import { cacheManager, CacheKeyBuilder } from './cache';
 import { getProviderConfig, formatApiKeyHeader, getSystemApiKey } from '@/lib/providers/config';
 import { getAccountById, getAccountByUserIdAndProvider } from '@/lib/db-queries';
 import { Pool } from '@neondatabase/serverless';
+import { getBaseUrl } from '@/lib/get-base-url';
 
 // Legacy provider endpoints for backward compatibility
 // New providers should be defined in /lib/providers/config.ts
@@ -37,6 +38,7 @@ export interface ApiRequestOptions {
   skipRetry?: boolean;
   skipCircuitBreaker?: boolean;
   authMethod?: 'oauth' | 'system';
+  userToken?: string; // Bearer token for refresh endpoint
 }
 
 export interface ApiResponse<T = any> {
@@ -61,43 +63,39 @@ export class SimplifiedApiClient {
     let version: string | undefined;
     
     if (providerConfig) {
-      baseUrl = providerConfig.baseUrl;
-      // Extract version from base URL if it ends with a version pattern
-      const versionMatch = baseUrl.match(/\/v\d+$/);
-      if (versionMatch) {
-        version = undefined; // Version is already in base URL
-      }
+      baseUrl = providerConfig.api.baseUrl;
+      version = providerConfig.api.version;
     } else {
-      // Fallback to legacy endpoints
+      // Fall back to legacy endpoints
       const endpoint = providerEndpoints[provider];
       if (!endpoint) {
-        throw new Error(`Unknown provider: ${provider}`);
+        throw new ApiError(
+          ApiErrorCode.BAD_REQUEST,
+          `Unknown provider: ${provider}`,
+          {
+            provider,
+            operation,
+            originalError: null,
+            retryable: false,
+          }
+        );
       }
       baseUrl = endpoint.baseUrl;
       version = endpoint.version;
     }
     
-    // Build URL
-    const basePath = version ? `/${version}` : '';
-    const url = `${baseUrl}${basePath}${path}`;
+    const url = `${baseUrl}${version ? `/${version}` : ''}${path}`;
     
-    // Build cache key if caching is enabled
-    let cacheKey: string | undefined;
-    if (options.cache?.enabled && options.method === 'GET') {
-      cacheKey = options.cache.key || CacheKeyBuilder.build({
-        provider,
-        userId,
-        path,
-        query: options.query,
-      });
-      
-      // Check cache first
-      const cached = cacheManager.getCache(provider).get(cacheKey);
+    // Check cache for GET requests
+    const cacheKey = options.cache?.enabled && options.method === 'GET'
+      ? CacheKeyBuilder.build(provider, operation, options.query || {}, options.cache.key)
+      : null;
+    
+    if (cacheKey) {
+      const cached = cacheManager.getCache(provider).get<ApiResponse<T>>(cacheKey);
       if (cached) {
-        return {
-          ...(cached as ApiResponse<T>),
-          cached: true,
-        };
+        apiLogger.logCacheHit(provider, operation, cacheKey);
+        return { ...cached, cached: true };
       }
     }
     
@@ -131,7 +129,6 @@ export class SimplifiedApiClient {
           } else {
             // Default to OAuth
             // Get access token from the database
-            // Note: Better Auth will handle refresh automatically when we call their API endpoints
             const db = auth.options.database as Pool;
             const account = accountId
               ? await getAccountById(db, accountId)
@@ -150,7 +147,37 @@ export class SimplifiedApiClient {
               );
             }
             
-            authHeaders = { 'Authorization': `Bearer ${account.accessToken}` };
+            // Check if token is expired and refresh if needed
+            let accessToken = account.accessToken;
+            if (account.accessTokenExpiresAt && new Date(account.accessTokenExpiresAt) <= new Date()) {
+              // Token is expired, try to refresh it
+              if (account.refreshToken) {
+                try {
+                  const refreshResponse = await fetch(`${getBaseUrl()}/api/auth/refresh/${provider}`, {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Bearer ${options.userToken}`,
+                      'Content-Type': 'application/json',
+                    },
+                  });
+                  
+                  if (refreshResponse.ok) {
+                    const refreshData = await refreshResponse.json();
+                    accessToken = refreshData.accessToken;
+                    console.log(`Refreshed expired token for provider ${provider}`);
+                  } else {
+                    console.warn(`Failed to refresh token for provider ${provider}, using potentially expired token`);
+                  }
+                } catch (refreshError) {
+                  console.error(`Error refreshing token for provider ${provider}:`, refreshError);
+                  // Continue with the expired token - let the API call fail naturally
+                }
+              } else {
+                console.warn(`Token expired for provider ${provider} but no refresh token available`);
+              }
+            }
+            
+            authHeaders = { 'Authorization': `Bearer ${accessToken}` };
           }
           
           // Build headers
@@ -278,11 +305,10 @@ export class SimplifiedApiClient {
     return withRetry(
       requestWithCircuitBreaker,
       providerRetryConfigs[provider],
-      (attempt, error, delayMs) => {
-        console.log(
-          `Retrying ${provider}:${operation} (attempt ${attempt}) after ${delayMs}ms`,
-          error.message
-        );
+      {
+        provider,
+        operation,
+        userId,
       }
     );
   }
@@ -296,10 +322,14 @@ export class SimplifiedApiClient {
     operation: string,
     options?: Omit<ApiRequestOptions, 'method'>
   ): Promise<ApiResponse<T>> {
-    return this.request<T>(provider, userId, accountId, path, operation, {
-      ...options,
-      method: 'GET',
-    });
+    return this.request<T>(
+      provider,
+      userId,
+      accountId,
+      path,
+      operation,
+      { ...options, method: 'GET' }
+    );
   }
   
   async post<T = any>(
@@ -311,11 +341,27 @@ export class SimplifiedApiClient {
     body: any,
     options?: Omit<ApiRequestOptions, 'method' | 'body'>
   ): Promise<ApiResponse<T>> {
-    return this.request<T>(provider, userId, accountId, path, operation, {
-      ...options,
-      method: 'POST',
-      body,
+    return this.request<T>(
+      provider,
+      userId,
+      accountId,
+      path,
+      operation,
+      { ...options, method: 'POST', body }
+    );
+  }
+  
+  private sanitizeHeaders(headers: Record<string, string>): Record<string, string> {
+    const sanitized = { ...headers };
+    const sensitiveFields = ['authorization', 'api-key', 'x-api-key'];
+    
+    sensitiveFields.forEach(field => {
+      if (sanitized[field]) {
+        sanitized[field] = '[REDACTED]';
+      }
     });
+    
+    return sanitized;
   }
   
   private async parseResponse<T>(response: Response): Promise<T> {
@@ -325,66 +371,16 @@ export class SimplifiedApiClient {
       return response.json();
     }
     
-    const text = await response.text();
-    return text as unknown as T;
-  }
-  
-  private sanitizeHeaders(headers: Record<string, string>): Record<string, string> {
-    const sanitized: Record<string, string> = {};
-    const sensitiveKeys = ['authorization', 'api-key', 'x-api-key'];
-    
-    for (const [key, value] of Object.entries(headers)) {
-      if (sensitiveKeys.includes(key.toLowerCase())) {
-        sanitized[key] = '[REDACTED]';
-      } else {
-        sanitized[key] = value;
-      }
+    if (contentType?.includes('text/')) {
+      const text = await response.text();
+      return text as unknown as T;
     }
     
-    return sanitized;
+    // For other content types, return as blob
+    const blob = await response.blob();
+    return blob as unknown as T;
   }
 }
 
-// Helper to check if a provider is connected
-export async function isProviderConnected(
-  userId: string,
-  provider: string,
-  options?: { allowSystemKey?: boolean }
-): Promise<{ connected: boolean; accountId?: string; authMethod?: 'oauth' | 'system' }> {
-  try {
-    // Check if user has an account for this provider
-    const db = auth.options.database as Pool;
-    const account = await getAccountByUserIdAndProvider(db, userId, provider);
-    
-    if (account?.accessToken) {
-      // Check if token exists (Better Auth will handle refresh when needed)
-      // TODO: In the future, we could check accessTokenExpiresAt to see if it's expired
-      // and preemptively mark as not connected, but for now we'll let the API call fail
-      // and handle the 401 response
-      
-      return { 
-        connected: true,
-        accountId: account.id,
-        authMethod: 'oauth'
-      };
-    }
-    
-    // Check system API key if allowed
-    if (options?.allowSystemKey) {
-      const systemApiKey = getSystemApiKey(provider);
-      if (systemApiKey) {
-        return { 
-          connected: true,
-          authMethod: 'system'
-        };
-      }
-    }
-    
-    return { connected: false };
-  } catch {
-    return { connected: false };
-  }
-}
-
-// Singleton instance
+// Export singleton instance
 export const apiClient = new SimplifiedApiClient();

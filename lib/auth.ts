@@ -39,6 +39,7 @@ export const auth = betterAuth({
           userInfoUrl: "https://api.hubapi.com/oauth/v1/access-tokens",
           scopes: ["crm.objects.contacts.read"],
           accessType: "offline",
+          authentication: "post" as const,
           getUserInfo: async (tokens) => {
             // Get access token info to retrieve user details
             const tokenInfoResponse = await fetch(`https://api.hubapi.com/oauth/v1/access-tokens/${tokens.accessToken}`);
@@ -79,6 +80,7 @@ export const auth = betterAuth({
           tokenUrl: "https://api.pandadoc.com/oauth2/access_token",
           scopes: ["read+write"],
           accessType: "offline",
+          authentication: "post" as const,
           getUserInfo: async (tokens) => {
             // Get current user info from PandaDoc API
             const userResponse = await fetch("https://api.pandadoc.com/public/v1/members/current", {
@@ -112,6 +114,7 @@ export const auth = betterAuth({
           tokenUrl: "https://identity.xero.com/connect/token",
           scopes: ["openid", "profile", "email", "accounting.contacts.read", "accounting.transactions", "offline_access"],
           accessType: "offline",
+          authentication: "basic" as const,
           getUserInfo: async (tokens) => {
             // First, try to get user info from the OpenID Connect endpoint
             let userEmail = "";
