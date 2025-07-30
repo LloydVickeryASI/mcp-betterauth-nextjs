@@ -3,11 +3,15 @@
 import { betterAuth } from "better-auth";
 import { Pool } from "@neondatabase/serverless";
 import { spawn } from "child_process";
+import { TEST_USER_EMAIL } from "../lib/auth-mode.js";
 
 // Initialize auth with same config as your app
 const auth = betterAuth({
   database: new Pool({
-    connectionString: process.env.DATABASE_URL
+    connectionString: process.env.DATABASE_URL,
+    max: 20,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 2000,
   }),
   basePath: "/api/auth",
   baseURL: process.env.AUTH_ISSUER || "http://localhost:3000",
@@ -16,11 +20,11 @@ const auth = betterAuth({
 async function getOrCreateTestToken() {
   // Check for existing test user
   const db = auth.options.database;
-  const testUserResult = await db.query('SELECT * FROM "user" WHERE email = $1', ["test@example.com"]);
+  const testUserResult = await db.query('SELECT * FROM "user" WHERE email = $1', [TEST_USER_EMAIL]);
   const testUser = testUserResult.rows[0];
   
   if (!testUser) {
-    console.log("No test user found. Please sign in with test@example.com first.");
+    console.log(`No test user found. Please sign in with ${TEST_USER_EMAIL} first.`);
     process.exit(1);
   }
 
