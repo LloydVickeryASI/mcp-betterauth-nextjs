@@ -2,39 +2,33 @@
 
 import { useState, useEffect } from 'react';
 import { authClient } from "@/lib/auth-client";
+import type { EnvironmentInfo, OAuthFlowInfo, Session } from './types';
 
 export default function TestOAuth() {
-  const [environment, setEnvironment] = useState<{
-    authHubUrl?: string;
-    currentUrl: string;
-    isPreview: boolean;
-    isProduction: boolean;
-    isLocal: boolean;
-  }>({
+  const [environment, setEnvironment] = useState<EnvironmentInfo>({
     currentUrl: '',
     isPreview: false,
     isProduction: false,
     isLocal: false,
   });
   
-  const [oauthFlow, setOauthFlow] = useState<{
-    redirectUri?: string;
-    stateGenerated?: boolean;
-    callbackExpected?: string;
-  }>({});
+  const [oauthFlow, setOauthFlow] = useState<OAuthFlowInfo>({});
   
-  const [session, setSession] = useState<any>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     // Check environment
     const url = window.location.origin;
+    const hubUrl = process.env.NEXT_PUBLIC_AUTH_HUB_URL;
+    
     setEnvironment({
-      authHubUrl: process.env.NEXT_PUBLIC_AUTH_HUB_URL,
+      authHubUrl: hubUrl,
       currentUrl: url,
-      isPreview: url.includes('.vercel.app') && !url.includes('mcp-betterauth-nextjs.vercel.app'),
-      isProduction: url === process.env.NEXT_PUBLIC_AUTH_HUB_URL,
-      isLocal: url.includes('localhost'),
+      isPreview: url.includes('.vercel.app') && (!hubUrl || !url.includes(new URL(hubUrl).hostname)),
+      isProduction: hubUrl ? url === hubUrl : false,
+      isLocal: url.includes('localhost') || url.includes('127.0.0.1'),
     });
 
     // Check session
@@ -43,33 +37,45 @@ export default function TestOAuth() {
 
   const checkSession = async () => {
     try {
-      const session = await authClient.getSession();
-      setSession(session);
+      const result = await authClient.getSession();
+      if (result.data) {
+        setSession(result.data);
+      } else {
+        setSession(null);
+      }
     } catch (error) {
       console.error('Session check failed:', error);
+      setSession(null);
     } finally {
       setLoading(false);
     }
   };
 
   const testOAuthFlow = async () => {
-    // Determine expected flow
-    if (process.env.NEXT_PUBLIC_AUTH_HUB_URL) {
-      setOauthFlow({
-        redirectUri: `${process.env.NEXT_PUBLIC_AUTH_HUB_URL}/api/auth/callback/microsoft`,
-        stateGenerated: true,
-        callbackExpected: `${window.location.origin}/api/auth/session/handoff`,
-      });
-    } else {
-      setOauthFlow({
-        redirectUri: `${window.location.origin}/api/auth/callback/microsoft`,
-        stateGenerated: false,
-        callbackExpected: 'Direct callback to current domain',
-      });
-    }
+    try {
+      setError(null);
+      
+      // Determine expected flow
+      if (process.env.NEXT_PUBLIC_AUTH_HUB_URL) {
+        setOauthFlow({
+          redirectUri: `${process.env.NEXT_PUBLIC_AUTH_HUB_URL}/api/auth/callback/microsoft`,
+          stateGenerated: true,
+          callbackExpected: `${window.location.origin}/api/auth/session/handoff`,
+        });
+      } else {
+        setOauthFlow({
+          redirectUri: `${window.location.origin}/api/auth/callback/microsoft`,
+          stateGenerated: false,
+          callbackExpected: 'Direct callback to current domain',
+        });
+      }
 
-    // Initiate OAuth
-    window.location.href = `/api/auth/microsoft/initiate?callbackURL=/test-oauth`;
+      // Initiate OAuth
+      window.location.href = `/api/auth/microsoft/initiate?callbackURL=/test-oauth`;
+    } catch (err) {
+      console.error('Failed to initiate OAuth flow:', err);
+      setError('Failed to start OAuth flow. Please try again.');
+    }
   };
 
   const signOut = async () => {
@@ -154,6 +160,14 @@ export default function TestOAuth() {
           <p className="text-red-700">✗ Not authenticated</p>
         )}
       </div>
+
+      {/* Error Display */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
+          <p className="font-semibold">Error</p>
+          <p className="text-sm">{error}</p>
+        </div>
+      )}
 
       {/* Actions */}
       <div className="flex gap-4">
