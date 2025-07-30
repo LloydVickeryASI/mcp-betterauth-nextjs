@@ -255,6 +255,18 @@ export default function Connections() {
             authentication, it will use the connected account associated with your Microsoft login.
           </p>
         </div>
+
+        {/* Development/Testing Link */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="mt-4 text-center">
+            <a 
+              href="/test-oauth" 
+              className="text-sm text-blue-600 hover:text-blue-800 underline"
+            >
+              Test OAuth Flow →
+            </a>
+          </div>
+        )}
       </div>
     </div>
   );
