@@ -13,17 +13,25 @@ async function isProviderConnected(userId: string, providerId: string) {
       }
     });
     
+    console.log(`[DEBUG] Checking ${providerId} connection for user ${userId}`);
+    console.log(`[DEBUG] Total accounts found: ${accounts?.length || 0}`);
+    console.log(`[DEBUG] Account providers:`, accounts?.map(acc => acc.provider));
+    
     // Filter for the specific provider
     const account = accounts?.filter(acc => acc.provider === providerId);
     
+    console.log(`[DEBUG] Filtered accounts for ${providerId}:`, account?.length || 0);
+    
     if (account && account.length > 0) {
       const acc = account[0];
+      console.log(`[DEBUG] Found ${providerId} account with ID:`, acc.accountId);
       return {
         connected: true,
         accountId: acc.accountId,
       };
     }
     
+    console.log(`[DEBUG] No ${providerId} account found`);
     return { connected: false };
   } catch (error) {
     console.error(`Failed to check ${providerId} connection:`, error);
@@ -195,6 +203,7 @@ function capitalizeProvider(provider: string): string {
     anthropic: "Anthropic",
     sendgrid: "SendGrid",
     slack: "Slack",
+    xero: "Xero",
   };
   return providerNames[provider.toLowerCase()] || provider;
 }
