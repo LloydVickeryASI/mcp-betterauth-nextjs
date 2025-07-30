@@ -2,6 +2,22 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
+  // Protect test routes in production
+  if (process.env.NODE_ENV === 'production') {
+    const path = request.nextUrl.pathname;
+    
+    // List of test routes to protect
+    const testRoutes = ['/test-oauth', '/api/test'];
+    
+    // Check if the current path starts with any test route
+    const isTestRoute = testRoutes.some(route => path.startsWith(route));
+    
+    if (isTestRoute) {
+      // Return 404 for test routes in production
+      return new NextResponse('Not Found', { status: 404 });
+    }
+  }
+
   // Let the connections page handle its own authentication
   // The MCP OAuth flow might use different session management
 
@@ -59,5 +75,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/api/:path*']
+  matcher: ['/api/:path*', '/test-oauth']
 }
