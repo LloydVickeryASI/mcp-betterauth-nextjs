@@ -19,10 +19,8 @@ Sentry.init({
 
   // Add integrations for better tracing
   integrations: [
-    // HTTP integration for automatic trace propagation
-    Sentry.httpIntegration({
-      breadcrumbs: true,
-    }),
+    // Note: httpIntegration is not available in @sentry/nextjs v9
+    // It's included by default in the Next.js SDK
   ],
 
   // Propagate traces to all external APIs using wildcard
