@@ -104,6 +104,46 @@ export const auth = betterAuth({
             };
           },
         },
+        {
+          providerId: "xero",
+          clientId: process.env.XERO_CLIENT_ID!,
+          clientSecret: process.env.XERO_CLIENT_SECRET!,
+          authorizationUrl: "https://login.xero.com/identity/connect/authorize",
+          tokenUrl: "https://identity.xero.com/connect/token",
+          scopes: ["accounting.contacts.read", "offline_access"],
+          accessType: "offline",
+          getUserInfo: async (tokens) => {
+            // Get the Xero connections to find the user's tenant
+            const connectionsResponse = await fetch("https://api.xero.com/connections", {
+              headers: {
+                Authorization: `Bearer ${tokens.accessToken}`,
+                "Content-Type": "application/json",
+              },
+            });
+            
+            if (!connectionsResponse.ok) {
+              return null;
+            }
+            
+            const connections = await connectionsResponse.json();
+            const primaryConnection = connections[0]; // Use the first connection
+            
+            if (!primaryConnection) {
+              return null;
+            }
+            
+            return {
+              id: primaryConnection.tenantId,
+              email: "", // Xero doesn't provide email in connections
+              name: primaryConnection.tenantName || "Xero User",
+              emailVerified: true,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+              // Store tenant ID in providerAccountId for later use
+              providerAccountId: primaryConnection.tenantId,
+            };
+          },
+        },
       ],
     }),
     nextCookies(),
