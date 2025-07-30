@@ -63,8 +63,8 @@ export class SimplifiedApiClient {
     let version: string | undefined;
     
     if (providerConfig) {
-      baseUrl = providerConfig.api.baseUrl;
-      version = providerConfig.api.version;
+      baseUrl = providerConfig.baseUrl;
+      version = undefined; // Provider config doesn't have version
     } else {
       // Fall back to legacy endpoints
       const endpoint = providerEndpoints[provider];
@@ -88,13 +88,17 @@ export class SimplifiedApiClient {
     
     // Check cache for GET requests
     const cacheKey = options.cache?.enabled && options.method === 'GET'
-      ? CacheKeyBuilder.build(provider, operation, options.query || {}, options.cache.key)
+      ? CacheKeyBuilder.build({
+          provider,
+          operation,
+          ...options.query,
+          customKey: options.cache.key
+        })
       : null;
     
     if (cacheKey) {
-      const cached = cacheManager.getCache(provider).get<ApiResponse<T>>(cacheKey);
+      const cached = cacheManager.getCache(provider).get(cacheKey) as ApiResponse<T> | undefined;
       if (cached) {
-        apiLogger.logCacheHit(provider, operation, cacheKey);
         return { ...cached, cached: true };
       }
     }
@@ -304,12 +308,7 @@ export class SimplifiedApiClient {
     
     return withRetry(
       requestWithCircuitBreaker,
-      providerRetryConfigs[provider],
-      {
-        provider,
-        operation,
-        userId,
-      }
+      providerRetryConfigs[provider]
     );
   }
   

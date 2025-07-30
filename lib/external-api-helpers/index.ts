@@ -1,5 +1,8 @@
 // Main API client - using simplified version
-export { apiClient, isProviderConnected, type ApiRequestOptions, type ApiResponse } from './simplified-api-client';
+export { apiClient, type ApiRequestOptions, type ApiResponse } from './simplified-api-client';
+
+// Database queries
+export { isProviderConnected } from '../db-queries';
 
 // Rate limiting
 export { rateLimiter, type RateLimiterConfig } from './rate-limiter';
