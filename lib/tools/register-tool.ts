@@ -51,16 +51,17 @@ export function registerTool(
     schema,
     async (args: any) => {
       // Start a new trace for each tool call
-      return await Sentry.startNewTrace(async () => {
-        return await Sentry.startSpan(
-          {
-            name: `mcp.tool/${name}`,
-            attributes: {
-              "mcp.tool.name": name,
-              ...extractMcpParameters(args),
-            },
+      return await Sentry.startSpan(
+        {
+          name: `mcp.tool/${name}`,
+          op: "mcp.tool",
+          forceTransaction: true, // This creates a new transaction/trace
+          attributes: {
+            "mcp.tool.name": name,
+            ...extractMcpParameters(args),
           },
-          async (span) => {
+        },
+        async (span) => {
             // Use withScope to isolate context changes to this specific tool execution
             return await Sentry.withScope(async (scope) => {
               // Get the context from the server's stored session
@@ -107,9 +108,8 @@ export function registerTool(
               }
               // No need for finally block - scope is automatically cleaned up
             });
-          }
-        );
-      });
+        }
+      );
     }
   );
 }
