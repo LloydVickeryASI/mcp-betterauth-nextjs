@@ -3,35 +3,20 @@ import * as Sentry from "@sentry/nextjs";
 import { registerTool, type ToolContext } from "./register-tool";
 import { getProviderConfig, hasSystemApiKey, type ProviderConfig } from "@/lib/providers/config";
 import { auth } from "@/lib/auth";
+import { getAccountByUserIdAndProvider } from "@/lib/db-queries";
 
 // Helper function to check if a provider is connected via OAuth
-async function isProviderConnected(userId: string, providerId: string) {
+async function isProviderConnected(userId: string, providerId: string, db: any) {
   try {
-    const accounts = await auth.api.listUserAccounts({
-      query: {
-        userId,
-      }
-    });
+    const account = await getAccountByUserIdAndProvider(db, userId, providerId);
     
-    console.log(`[DEBUG] Checking ${providerId} connection for user ${userId}`);
-    console.log(`[DEBUG] Total accounts found: ${accounts?.length || 0}`);
-    console.log(`[DEBUG] Account providers:`, accounts?.map(acc => acc.provider));
-    
-    // Filter for the specific provider
-    const account = accounts?.filter(acc => acc.provider === providerId);
-    
-    console.log(`[DEBUG] Filtered accounts for ${providerId}:`, account?.length || 0);
-    
-    if (account && account.length > 0) {
-      const acc = account[0];
-      console.log(`[DEBUG] Found ${providerId} account with ID:`, acc.accountId);
+    if (account && account.accessToken) {
       return {
         connected: true,
-        accountId: acc.accountId,
+        accountId: account.id,
       };
     }
     
-    console.log(`[DEBUG] No ${providerId} account found`);
     return { connected: false };
   } catch (error) {
     console.error(`Failed to check ${providerId} connection:`, error);
@@ -89,7 +74,7 @@ export function createProviderTool<TArgs = any>(
         // Determine which auth method to use
         if (authMethod === 'oauth' || authMethod === 'auto') {
           // Check OAuth connection
-          const oauthStatus = await isProviderConnected(context.session.userId, config.provider);
+          const oauthStatus = await isProviderConnected(context.session.userId, config.provider, context.db);
           if (oauthStatus.connected) {
             connectionStatus = { ...oauthStatus, authMethod: 'oauth' };
             actualAuthMethod = 'oauth';
