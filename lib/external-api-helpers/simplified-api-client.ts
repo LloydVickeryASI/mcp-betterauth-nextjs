@@ -108,19 +108,7 @@ export class SimplifiedApiClient {
     
     // Create the request function
     const makeRequest = async (): Promise<ApiResponse<T>> => {
-      // Wrap the entire API call in a span
-      return await Sentry.startSpan(
-        {
-          name: `http.client/${provider}`,
-          attributes: {
-            "http.method": options.method || 'GET',
-            "http.url": url,
-            "http.provider": provider,
-            "api.operation": operation,
-            "api.auth_method": options.authMethod || 'oauth',
-          },
-        },
-        async (span) => {
+      try {
           let authHeaders: Record<string, string> = {};
           
           // Determine authentication method
@@ -180,10 +168,6 @@ export class SimplifiedApiClient {
             });
           }
           
-          // Update span with full URL
-          span.setAttributes({
-            "http.full_url": urlObj.toString(),
-          });
           
           // Log request
           const logResponse = apiLogger.createRequestLogger({
@@ -225,30 +209,8 @@ export class SimplifiedApiClient {
               responseBody: responseData,
             });
             
-            // Update span with response status
-            span.setAttributes({
-              "http.status_code": response.status,
-            });
-            
             // Handle errors
             if (!response.ok) {
-              span.setStatus({ code: 2 }); // error
-              
-              // Add error response as span event
-              try {
-                const errorStr = JSON.stringify(responseData);
-                span.addEvent("api.response.error", {
-                  "response.body": errorStr.slice(0, 1000), // Limit size
-                  "response.status": response.status,
-                  "response.truncated": errorStr.length > 1000,
-                });
-              } catch (e) {
-                span.addEvent("api.response.error", {
-                  "response.body": "[Unable to serialize error response]",
-                  "response.status": response.status,
-                  "serialize.error": String(e),
-                });
-              }
               
               const errorMapper = providerErrorMappers[provider] || mapProviderError;
               throw errorMapper(operation, {
@@ -257,24 +219,6 @@ export class SimplifiedApiClient {
                   data: responseData,
                   headers: Object.fromEntries(response.headers.entries()),
                 },
-              });
-            }
-            
-            span.setStatus({ code: 1 }); // success
-            
-            // Add successful response as span event (with size limit)
-            try {
-              const responseStr = JSON.stringify(responseData);
-              span.addEvent("api.response.success", {
-                "response.preview": responseStr.slice(0, 1000),
-                "response.size": responseStr.length,
-                "response.truncated": responseStr.length > 1000,
-              });
-            } catch (e) {
-              // Handle circular references or other stringify errors
-              span.addEvent("api.response.success", {
-                "response.preview": "[Unable to serialize response]",
-                "response.error": String(e),
               });
             }
             
@@ -295,9 +239,6 @@ export class SimplifiedApiClient {
             
             return result;
           } catch (error) {
-            span.setStatus({ code: 2 }); // error
-            span.recordException(error as Error);
-            
             // Log error
             logComplete({
               ...requestLog,
@@ -314,8 +255,10 @@ export class SimplifiedApiClient {
             const errorMapper = providerErrorMappers[provider] || mapProviderError;
             throw errorMapper(operation, error);
           }
-        }
-      );
+      } catch (outerError) {
+        console.error("Error in makeRequest:", outerError);
+        throw outerError;
+      }
     };
     
     // Apply circuit breaker
