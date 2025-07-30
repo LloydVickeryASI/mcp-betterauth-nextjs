@@ -145,9 +145,7 @@ function capitalizeProvider(provider: string): string {
     hubspot: "HubSpot",
     pandadoc: "PandaDoc",
     microsoft: "Microsoft",
-    openai: "OpenAI",
     anthropic: "Anthropic",
-    stripe: "Stripe",
     sendgrid: "SendGrid",
     slack: "Slack",
   };
