@@ -126,7 +126,8 @@ export const auth = betterAuth({
             }
             
             const connections = await connectionsResponse.json();
-            const primaryConnection = connections[0]; // Use the first connection
+            // TODO: For users with multiple Xero organizations, consider allowing tenant selection
+            const primaryConnection = connections[0]; // Use the first connection as primary
             
             if (!primaryConnection) {
               return null;

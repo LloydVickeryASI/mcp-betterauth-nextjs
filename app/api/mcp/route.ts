@@ -133,6 +133,9 @@ const mcpHandlerFunction = async (req: Request, session: any) => {
                     get_auth_status: {
                         description: "Get authentication status with Microsoft profile information",
                     },
+                    search_xero_contacts: {
+                        description: "Search Xero accounting contacts by name or email address",
+                    },
                 },
             },
         },
