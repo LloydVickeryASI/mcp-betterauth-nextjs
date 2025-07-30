@@ -51,10 +51,14 @@ cp .env.example .env.local
 4. Update `.env.local` with your configuration:
    - Generate a secure `BETTER_AUTH_SECRET`
    - Configure `DATABASE_URL` (SQLite for dev, Postgres/MySQL for production)
-   - Set `AUTH_ISSUER` URL
    - Microsoft OAuth: `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_TENANT_ID`
    - HubSpot OAuth: `HUBSPOT_CLIENT_ID`, `HUBSPOT_CLIENT_SECRET`
    - PandaDoc OAuth: `PANDADOC_CLIENT_ID`, `PANDADOC_CLIENT_SECRET`
+   
+   **Note**: The base URL is automatically detected:
+   - Local development: `http://localhost:3000`
+   - Vercel deployments: Uses `VERCEL_URL` automatically
+   - Override local URL with `LOCAL_URL` in `.env.local` if needed
 
 5. Run the development server:
 ```bash
@@ -96,11 +100,12 @@ vercel
 3. Set environment variables in Vercel dashboard:
    - `BETTER_AUTH_SECRET`
    - `DATABASE_URL` (use Vercel Postgres or similar)
-   - `AUTH_ISSUER` (optional, auto-detected)
    - `REDIS_URL` (optional, for SSE resumability)
    - Microsoft OAuth credentials
    - HubSpot OAuth credentials (optional, for HubSpot tools)
    - PandaDoc OAuth credentials (optional, for PandaDoc tools)
+   
+   **Note**: Vercel automatically sets `VERCEL_URL` for preview and production deployments. The application will use this to construct the correct OAuth redirect URLs.
 
 ## Authentication Architecture
 
@@ -154,6 +159,49 @@ Point to the same URL and provide OAuth token from Better Auth's sign-in flow.
 - **Database**: SQLite (dev) / Postgres (prod)
 - **Hosting**: Vercel Functions
 - **Styling**: Tailwind CSS
+
+## Handling Vercel Preview Deployments
+
+### Automatic URL Detection
+
+The application automatically detects the correct base URL for OAuth redirects:
+
+1. **Local Development**: Defaults to `http://localhost:3000`
+   - Override with `LOCAL_URL` in `.env.local` if using a different port
+
+2. **Vercel Preview Deployments**: Automatically uses the preview URL
+   - Vercel sets `VERCEL_URL` for each deployment
+   - OAuth redirects will use `https://{preview-branch}-{project}.vercel.app`
+
+3. **Production**: Uses your production domain
+   - Vercel sets `VERCEL_URL` to your production domain
+
+### OAuth Provider Setup for Preview Deployments
+
+Since preview URLs are dynamic, you have several options:
+
+1. **Wildcard Redirects** (if supported by provider):
+   - Add `https://*.vercel.app/api/auth/callback/{provider}` as redirect URI
+
+2. **Multiple Redirect URIs**:
+   - Add your production URL
+   - Add common preview patterns
+   - Add localhost for development
+
+3. **Dynamic Registration** (advanced):
+   - Use OAuth dynamic client registration
+   - Automatically register new redirect URIs
+
+### Example OAuth Redirect URIs
+
+For Microsoft/HubSpot/PandaDoc, add these redirect URIs:
+```
+http://localhost:3000/api/auth/callback/{provider}
+https://your-app.vercel.app/api/auth/callback/{provider}
+https://*-your-org.vercel.app/api/auth/callback/{provider}
+```
+
+Replace `{provider}` with `microsoft`, `hubspot`, or `pandadoc`.
 
 ## License
 

@@ -108,6 +108,31 @@ This project uses PostgreSQL with the Neon serverless driver for optimal perform
 2. **Copy the connection string** to your `.env.local` as `DATABASE_URL`
 3. **Better Auth will automatically create tables** on first run
 
+#### Testing Database with psql
+
+You can use `psql` to directly query the database for debugging:
+
+```bash
+# Using the connection string from .env.local
+psql $DATABASE_URL
+
+# Or using individual parameters from .env.local
+PGPASSWORD=$PGPASSWORD psql -h $PGHOST -U $PGUSER -d $PGDATABASE
+
+# Example queries:
+# List all tables
+\dt
+
+# Check OAuth applications
+SELECT "clientId", "name", "createdAt" FROM "oauthApplication" ORDER BY "createdAt" DESC;
+
+# Check user accounts
+SELECT id, email, name FROM "user";
+
+# Check OAuth connections
+SELECT "userId", "providerId", "createdAt" FROM account;
+```
+
 ### Environment Variables
 
 Required in `.env.local`:

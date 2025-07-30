@@ -3,6 +3,7 @@ import { mcp } from "better-auth/plugins";
 import { genericOAuth } from "better-auth/plugins";
 import { nextCookies } from "better-auth/next-js";
 import { Pool } from "@neondatabase/serverless";
+import { getBaseUrl } from "./get-base-url";
 
 export const auth = betterAuth({
   database: new Pool({
@@ -12,7 +13,7 @@ export const auth = betterAuth({
     connectionTimeoutMillis: 2000, // Return an error after 2 seconds if connection cannot be established
   }),
   basePath: "/api/auth",
-  baseURL: process.env.AUTH_ISSUER || "http://localhost:3000",
+  baseURL: getBaseUrl(),
   emailAndPassword: {
     enabled: true
   },
