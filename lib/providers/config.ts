@@ -88,7 +88,7 @@ export const providers: Record<string, ProviderConfig> = {
   xero: {
     authMethods: {
       oauth: {
-        scopes: ["accounting.contacts.read", "offline_access"]
+        scopes: ["accounting.contacts.read", "accounting.transactions", "offline_access"]
       },
       systemApiKey: {
         envVar: "XERO_API_KEY",

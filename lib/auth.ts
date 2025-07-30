@@ -110,7 +110,7 @@ export const auth = betterAuth({
           clientSecret: process.env.XERO_CLIENT_SECRET!,
           authorizationUrl: "https://login.xero.com/identity/connect/authorize?prompt=select_account",
           tokenUrl: "https://identity.xero.com/connect/token",
-          scopes: ["openid", "profile", "email", "accounting.contacts.read", "offline_access"],
+          scopes: ["openid", "profile", "email", "accounting.contacts.read", "accounting.transactions", "offline_access"],
           accessType: "offline",
           getUserInfo: async (tokens) => {
             // First, try to get user info from the OpenID Connect endpoint
