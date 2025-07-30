@@ -11,10 +11,18 @@ Note the duplicate `/api/auth` in the path.
 
 ## Update: Better Auth MCP Plugin Bug
 
-This appears to be a bug in the Better Auth MCP plugin where it incorrectly constructs the `resource_metadata` URL in the WWW-Authenticate header. The OAuth metadata endpoints themselves are working correctly:
+This is a known bug in the Better Auth MCP plugin (see [issue #2703](https://github.com/better-auth/better-auth/issues/2703)).
+
+### The Bug
+In Better Auth v1.3.4, the MCP plugin constructs the WWW-Authenticate header incorrectly:
+- It appends `/api/auth/.well-known/oauth-authorization-server` to the base URL
+- If your base URL already includes `/api/auth`, you get a duplicate path
+- The fix exists in the main branch but hasn't been released yet
+
+### What Works vs What Doesn't
 - ✅ `/.well-known/oauth-authorization-server` returns correct data
 - ✅ Web OAuth flow works perfectly
-- ❌ MCP plugin adds extra `/api/auth` to the metadata URL
+- ❌ MCP plugin WWW-Authenticate header has wrong URL
 
 ## The Solution
 
