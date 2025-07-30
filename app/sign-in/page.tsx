@@ -33,15 +33,20 @@ function SignInContent() {
 
   const handleMicrosoftSignIn = async () => {
     try {
-      // For MCP OAuth flow, we need to handle social sign-in differently
-      // We'll use Better Auth's social sign-in but preserve the MCP OAuth state
       const mcpParams = searchParams.toString();
       console.log('Starting Microsoft sign-in with params:', mcpParams);
       
-      await authClient.signIn.social({
-        provider: "microsoft",
-        callbackURL: mcpParams ? `/api/auth/mcp/authorize?${mcpParams}` : "/connections",
-      });
+      // Use OAuth hub pattern if configured
+      if (process.env.NEXT_PUBLIC_AUTH_HUB_URL) {
+        const callbackURL = mcpParams ? `/api/auth/mcp/authorize?${mcpParams}` : "/connections";
+        window.location.href = `/api/auth/microsoft/initiate?callbackURL=${encodeURIComponent(callbackURL)}`;
+      } else {
+        // Standard BetterAuth flow for local development
+        await authClient.signIn.social({
+          provider: "microsoft",
+          callbackURL: mcpParams ? `/api/auth/mcp/authorize?${mcpParams}` : "/connections",
+        });
+      }
     } catch (error) {
       console.error('Microsoft sign-in error:', error);
     }

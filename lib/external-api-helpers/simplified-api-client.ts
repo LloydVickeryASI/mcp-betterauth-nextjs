@@ -63,8 +63,8 @@ export class SimplifiedApiClient {
     let version: string | undefined;
     
     if (providerConfig) {
-      baseUrl = providerConfig.api.baseUrl;
-      version = providerConfig.api.version;
+      baseUrl = providerConfig.baseUrl;
+      version = undefined; // Provider config doesn't have version
     } else {
       // Fall back to legacy endpoints
       const endpoint = providerEndpoints[provider];
@@ -88,13 +88,19 @@ export class SimplifiedApiClient {
     
     // Check cache for GET requests
     const cacheKey = options.cache?.enabled && options.method === 'GET'
-      ? CacheKeyBuilder.build(provider, operation, options.query || {}, options.cache.key)
+      ? CacheKeyBuilder.build({
+          provider,
+          operation,
+          query: options.query || {},
+          key: options.cache.key
+        })
       : null;
     
     if (cacheKey) {
-      const cached = cacheManager.getCache(provider).get<ApiResponse<T>>(cacheKey);
+      const cached = cacheManager.getCache(provider).get(cacheKey) as ApiResponse<T> | null;
       if (cached) {
-        apiLogger.logCacheHit(provider, operation, cacheKey);
+        // TODO: Add cache hit logging
+        // apiLogger.logCacheHit(provider, operation, cacheKey);
         return { ...cached, cached: true };
       }
     }
@@ -305,10 +311,8 @@ export class SimplifiedApiClient {
     return withRetry(
       requestWithCircuitBreaker,
       providerRetryConfigs[provider],
-      {
-        provider,
-        operation,
-        userId,
+      (attempt, error, delayMs) => {
+        console.log(`[API Retry] ${provider}:${operation} - Attempt ${attempt} after ${delayMs}ms delay`, error);
       }
     );
   }

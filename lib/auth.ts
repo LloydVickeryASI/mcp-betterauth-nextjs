@@ -22,6 +22,10 @@ export const auth = betterAuth({
       clientSecret: process.env.MICROSOFT_CLIENT_SECRET!,
       tenantId: process.env.MICROSOFT_TENANT_ID ?? "common",
       prompt: "select_account",
+      // Use static redirect URI for OAuth hub pattern
+      redirectURI: process.env.AUTH_HUB_URL 
+        ? `${process.env.AUTH_HUB_URL}/api/auth/callback/microsoft`
+        : undefined,
     },
   },
   plugins: [

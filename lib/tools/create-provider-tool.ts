@@ -1,8 +1,35 @@
 import { z } from "zod";
 import * as Sentry from "@sentry/nextjs";
 import { registerTool, type ToolContext } from "./register-tool";
-import { isProviderConnected } from "@/lib/external-api-helpers";
 import { getProviderConfig, hasSystemApiKey, type ProviderConfig } from "@/lib/providers/config";
+import { auth } from "@/lib/auth";
+
+// Helper function to check if a provider is connected via OAuth
+async function isProviderConnected(userId: string, providerId: string) {
+  try {
+    const accounts = await auth.api.listUserAccounts({
+      query: {
+        userId,
+      }
+    });
+    
+    // Filter for the specific provider
+    const account = accounts?.filter(acc => acc.provider === providerId);
+    
+    if (account && account.length > 0) {
+      const acc = account[0];
+      return {
+        connected: true,
+        accountId: acc.accountId,
+      };
+    }
+    
+    return { connected: false };
+  } catch (error) {
+    console.error(`Failed to check ${providerId} connection:`, error);
+    return { connected: false };
+  }
+}
 
 export type AuthMethod = 'oauth' | 'system' | 'auto';
 
