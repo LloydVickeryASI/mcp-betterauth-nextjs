@@ -7,6 +7,7 @@ import { registerHubSpotTools } from "@/lib/tools/hubspot";
 import { registerPandaDocTools } from "@/lib/tools/pandadoc";
 import { registerOpenAITools } from "@/lib/tools/openai";
 import { registerStripeTools } from "@/lib/tools/stripe";
+import { registerXeroTools } from "@/lib/tools/xero";
 import { isNoAuthMode, TEST_USER_EMAIL } from "@/lib/auth-mode";
 import { logSystemApiKeyStatus } from "@/lib/providers/validate";
 import { getUserById, getAccountByUserIdAndProvider, getUserByEmail, getSessionByUserId } from "@/lib/db-queries";
@@ -111,6 +112,7 @@ const mcpHandlerFunction = async (req: Request, session: any) => {
             // Register OAuth-based tools
             registerHubSpotTools(server);
             registerPandaDocTools(server);
+            registerXeroTools(server);
             
             // Register system API key-based tools
             registerOpenAITools(server);

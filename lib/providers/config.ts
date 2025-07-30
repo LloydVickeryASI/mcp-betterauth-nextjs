@@ -104,6 +104,22 @@ export const providers: Record<string, ProviderConfig> = {
       }
     },
     baseUrl: "https://slack.com/api"
+  },
+  xero: {
+    authMethods: {
+      oauth: {
+        scopes: ["accounting.contacts.read", "offline_access"]
+      },
+      systemApiKey: {
+        envVar: "XERO_API_KEY",
+        headerName: "Authorization",
+        headerFormat: "Bearer {key}"
+      }
+    },
+    baseUrl: "https://api.xero.com/api.xro/2.0",
+    headers: {
+      "Accept": "application/json"
+    }
   }
 };
 

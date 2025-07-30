@@ -8,6 +8,7 @@ interface ConnectionStatus {
   provider: string;
   connected: boolean;
   email?: string;
+  name?: string;
   connectedAt?: string;
   scopes?: string[];
 }
@@ -88,6 +89,13 @@ export default function Connections() {
             <path d="M8 12.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5-.67 1.5-1.5 1.5-1.5-.67-1.5-1.5z" fill="white"/>
             <path d="M13 12.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5-.67 1.5-1.5 1.5-1.5-.67-1.5-1.5z" fill="white"/>
             <path d="M7 16c0 2.21 1.79 4 4 4h2c2.21 0 4-1.79 4-4" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
+        );
+      case 'xero':
+        return (
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2L2 12L12 22L22 12L12 2Z" fill="currentColor"/>
+            <path d="M7 12L12 7L17 12L12 17L7 12Z" fill="white"/>
           </svg>
         );
       default:
@@ -192,6 +200,45 @@ export default function Connections() {
                   <button
                     onClick={() => handleConnect('pandadoc')}
                     className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                  >
+                    Connect
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Xero Connection */}
+          <div className="border rounded-lg p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <div className="text-blue-600">
+                  {getProviderIcon('xero')}
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold">Xero</h3>
+                  <p className="text-sm text-gray-600">
+                    Access your Xero accounting data and contacts
+                  </p>
+                  {connections.find(c => c.provider === 'xero')?.connected && (
+                    <p className="text-sm text-green-600 mt-1">
+                      Connected as {connections.find(c => c.provider === 'xero')?.email || connections.find(c => c.provider === 'xero')?.name || 'Xero User'}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div>
+                {connections.find(c => c.provider === 'xero')?.connected ? (
+                  <button
+                    onClick={() => handleDisconnect('xero')}
+                    className="px-4 py-2 border border-red-500 text-red-500 rounded-md hover:bg-red-50 transition-colors"
+                  >
+                    Disconnect
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleConnect('xero')}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
                   >
                     Connect
                   </button>
