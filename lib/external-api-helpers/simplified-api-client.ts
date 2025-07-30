@@ -91,16 +91,14 @@ export class SimplifiedApiClient {
       ? CacheKeyBuilder.build({
           provider,
           operation,
-          query: options.query || {},
-          key: options.cache.key
+          ...options.query,
+          customKey: options.cache.key
         })
       : null;
     
     if (cacheKey) {
-      const cached = cacheManager.getCache(provider).get(cacheKey) as ApiResponse<T> | null;
+      const cached = cacheManager.getCache(provider).get(cacheKey) as ApiResponse<T> | undefined;
       if (cached) {
-        // TODO: Add cache hit logging
-        // apiLogger.logCacheHit(provider, operation, cacheKey);
         return { ...cached, cached: true };
       }
     }
@@ -310,10 +308,7 @@ export class SimplifiedApiClient {
     
     return withRetry(
       requestWithCircuitBreaker,
-      providerRetryConfigs[provider],
-      (attempt, error, delayMs) => {
-        console.log(`[API Retry] ${provider}:${operation} - Attempt ${attempt} after ${delayMs}ms delay`, error);
-      }
+      providerRetryConfigs[provider]
     );
   }
   
