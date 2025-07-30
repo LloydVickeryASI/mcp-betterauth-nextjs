@@ -131,4 +131,4 @@ Watch for these in logs:
 - "Session handoff failed" - Token issues
 - "Invalid redirect origin" - Security blocks
 
-The test page at `/test-oauth` provides real-time feedback on all these aspects.
+The test page at `/test-oauth` provides real-time feedback on all these aspects. 
