@@ -1,6 +1,8 @@
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
+import { deleteAccount } from "@/lib/db-queries";
+import { Pool } from "@neondatabase/serverless";
 
 export async function DELETE(
   req: Request,
@@ -22,13 +24,11 @@ export async function DELETE(
     }
 
     // Delete the account connection from the database
-    const db = auth.options.database as any;
+    const db = auth.options.database as Pool;
     
-    const result = db.prepare(
-      'DELETE FROM account WHERE userId = ? AND providerId = ?'
-    ).run(session.user.id, provider);
+    const deletedCount = await deleteAccount(db, session.user.id, provider);
 
-    if (result.changes > 0) {
+    if (deletedCount > 0) {
       return NextResponse.json({ success: true, message: `${provider} disconnected successfully` });
     } else {
       return NextResponse.json({ error: "Connection not found" }, { status: 404 });

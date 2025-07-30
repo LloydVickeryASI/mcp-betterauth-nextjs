@@ -6,6 +6,8 @@ import { apiLogger } from './logging';
 import { circuitBreakerManager, providerCircuitConfigs } from './circuit-breaker';
 import { cacheManager, CacheKeyBuilder } from './cache';
 import { getProviderConfig, formatApiKeyHeader, getSystemApiKey } from '@/lib/providers/config';
+import { getAccountById, getAccountByUserIdAndProvider } from '@/lib/db-queries';
+import { Pool } from '@neondatabase/serverless';
 
 // Legacy provider endpoints for backward compatibility
 // New providers should be defined in /lib/providers/config.ts
@@ -128,10 +130,10 @@ export class SimplifiedApiClient {
         // Default to OAuth
         // Get access token from the database
         // Note: Better Auth will handle refresh automatically when we call their API endpoints
-        const db = auth.options.database as any;
+        const db = auth.options.database as Pool;
         const account = accountId
-          ? db.prepare('SELECT * FROM account WHERE id = ?').get(accountId)
-          : db.prepare('SELECT * FROM account WHERE userId = ? AND providerId = ?').get(userId, provider);
+          ? await getAccountById(db, accountId)
+          : await getAccountByUserIdAndProvider(db, userId, provider);
         
         if (!account?.accessToken) {
           throw new ApiError(
@@ -343,10 +345,8 @@ export async function isProviderConnected(
 ): Promise<{ connected: boolean; accountId?: string; authMethod?: 'oauth' | 'system' }> {
   try {
     // Check if user has an account for this provider
-    const db = auth.options.database as any;
-    const account = db
-      .prepare('SELECT * FROM account WHERE userId = ? AND providerId = ?')
-      .get(userId, provider);
+    const db = auth.options.database as Pool;
+    const account = await getAccountByUserIdAndProvider(db, userId, provider);
     
     if (account?.accessToken) {
       // Check if token exists (Better Auth will handle refresh when needed)

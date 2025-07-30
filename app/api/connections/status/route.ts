@@ -1,6 +1,8 @@
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
+import { getAccountsByUserId } from "@/lib/db-queries";
+import { Pool } from "@neondatabase/serverless";
 
 export async function GET(req: Request) {
   try {
@@ -12,10 +14,10 @@ export async function GET(req: Request) {
     }
 
     // Query the database for connected accounts
-    const db = auth.options.database as any;
+    const db = auth.options.database as Pool;
     
     // Get all accounts linked to this user
-    const accounts = db.prepare('SELECT * FROM account WHERE userId = ?').all(session.user.id);
+    const accounts = await getAccountsByUserId(db, session.user.id);
     
     // Format the connection status for each provider
     const connections = [
