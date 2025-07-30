@@ -9,6 +9,13 @@ When using MCP Inspector with preview deployments, the OAuth metadata URLs are i
 
 Note the duplicate `/api/auth` in the path.
 
+## Update: Better Auth MCP Plugin Bug
+
+This appears to be a bug in the Better Auth MCP plugin where it incorrectly constructs the `resource_metadata` URL in the WWW-Authenticate header. The OAuth metadata endpoints themselves are working correctly:
+- ✅ `/.well-known/oauth-authorization-server` returns correct data
+- ✅ Web OAuth flow works perfectly
+- ❌ MCP plugin adds extra `/api/auth` to the metadata URL
+
 ## The Solution
 
 For preview deployments, you need to set the `AUTH_URL` environment variable to your production hub URL. This ensures that:
@@ -57,12 +64,31 @@ In your Vercel project settings, configure environment variables like this:
 - `STATE_SECRET`: `<same-secret>`
 - `AUTH_URL`: `https://mcp-betterauth-nextjs.vercel.app`
 
+## Workaround Options
+
+### Option 1: Use Production MCP Endpoint (Recommended)
+Instead of connecting to the preview URL's MCP endpoint, connect directly to production:
+```
+https://mcp-betterauth-nextjs.vercel.app/api/mcp
+```
+
+This works because:
+- Production has the correct OAuth setup
+- Your web session from preview testing doesn't affect MCP sessions
+- Avoids the Better Auth plugin bug
+
+### Option 2: Wait for Better Auth Fix
+The issue needs to be fixed in the Better Auth MCP plugin to correctly construct the WWW-Authenticate header.
+
+### Option 3: Custom MCP Handler
+We could create a custom MCP handler that doesn't use the Better Auth plugin, but this would require significant work.
+
 ## Testing
 
-1. **Web OAuth**: Visit `/test-oauth` - should show authenticated
-2. **MCP OAuth**: Use MCP Inspector with the preview URL's `/api/mcp` endpoint
-   - Should redirect to Microsoft OAuth
-   - After auth, should connect successfully
+1. **Web OAuth**: Visit `/test-oauth` - ✅ Works (as you've confirmed)
+2. **MCP OAuth**: 
+   - ❌ Preview URL's `/api/mcp` - Fails due to plugin bug
+   - ✅ Production URL's `/api/mcp` - Should work correctly
 
 ## Why This Works
 
