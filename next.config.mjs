@@ -2,20 +2,14 @@ import {withSentryConfig} from '@sentry/nextjs';
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
-  experimental: {
-    // Enable partial prerendering for faster builds
-    ppr: true,
-    // Use newer bundler for faster builds
-    turbo: {
-      resolveAlias: {
-        canvas: './empty-module.ts',
-      },
-    },
-  },
   // Optimize production builds
   productionBrowserSourceMaps: false,
-  // Enable SWC minification
-  swcMinify: true,
+  // Turbopack configuration for faster builds
+  turbopack: {
+    resolveAlias: {
+      canvas: './empty-module.ts',
+    },
+  },
 }
 
 export default withSentryConfig(nextConfig, {
