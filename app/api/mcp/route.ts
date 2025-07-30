@@ -23,8 +23,21 @@ const mcpHandlerFunction = async (req: Request, session: any) => {
     // The session from withMcpAuth contains the MCP access token session
     console.log("MCP Session:", JSON.stringify(session, null, 2));
     
-    // Wrap the entire MCP handler in a Sentry scope
-    return await Sentry.withScope(async (scope) => {
+    // Create a trace for the entire MCP request
+    return await Sentry.startSpan(
+        {
+            op: "mcp.request",
+            name: "MCP Request Handler",
+            attributes: {
+                "mcp.session.user_id": session?.userId,
+                "mcp.session.client_id": session?.clientId,
+                "http.method": req.method,
+                "http.url": req.url,
+            }
+        },
+        async () => {
+            // Wrap the entire MCP handler in a Sentry scope
+            return await Sentry.withScope(async (scope) => {
         // Set user context for the entire MCP session
         if (session?.userId) {
             scope.setUser({ id: session.userId });
@@ -96,48 +109,69 @@ const mcpHandlerFunction = async (req: Request, session: any) => {
                     // Log to console to verify tool is called
                     console.log("test_sentry_trace called");
                     
-                    // Create a manual transaction
-                    const transaction = Sentry.startTransaction({
-                        op: "mcp.test",
-                        name: "Test Sentry Trace",
-                    });
-                    
-                    // Set transaction on scope
-                    Sentry.getCurrentScope().setSpan(transaction);
-                    
-                    // Add breadcrumb
-                    Sentry.addBreadcrumb({
-                        message: "Test trace started",
-                        category: "test",
-                        level: "info",
-                        timestamp: Date.now() / 1000,
-                    });
-                    
-                    // Create a child span
-                    const span = transaction.startChild({
-                        op: "test.operation",
-                        description: "Test operation within trace",
-                    });
-                    
-                    // Simulate some work
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                    
-                    // Capture a message
-                    Sentry.captureMessage("Test trace message", "info");
-                    
-                    // Finish the span and transaction
-                    span.finish();
-                    transaction.finish();
-                    
-                    return {
-                        content: [{
-                            type: "text",
-                            text: "Test trace sent to Sentry. Check your Sentry dashboard for:\n" +
-                                  "1. Transaction: 'Test Sentry Trace'\n" +
-                                  "2. Message: 'Test trace message'\n" +
-                                  "3. Breadcrumb: 'Test trace started'"
-                        }],
-                    };
+                    // Use the new startSpan API for Sentry v9
+                    return await Sentry.startSpan(
+                        {
+                            op: "mcp.test",
+                            name: "Test Sentry Trace",
+                            attributes: {
+                                "mcp.tool": "test_sentry_trace",
+                                "test.type": "manual",
+                            }
+                        },
+                        async (span) => {
+                            // Add breadcrumb
+                            Sentry.addBreadcrumb({
+                                message: "Test trace started",
+                                category: "test",
+                                level: "info",
+                                data: {
+                                    tool: "test_sentry_trace",
+                                    timestamp: new Date().toISOString()
+                                }
+                            });
+                            
+                            // Simulate some async work with a child span
+                            await Sentry.startSpan(
+                                {
+                                    op: "test.operation",
+                                    name: "Test async operation",
+                                    attributes: {
+                                        "operation.type": "sleep",
+                                        "operation.duration": 100
+                                    }
+                                },
+                                async () => {
+                                    await new Promise(resolve => setTimeout(resolve, 100));
+                                }
+                            );
+                            
+                            // Capture a test message
+                            Sentry.captureMessage("Test trace message from MCP", "info");
+                            
+                            // Add another breadcrumb
+                            Sentry.addBreadcrumb({
+                                message: "Test trace completed",
+                                category: "test",
+                                level: "info",
+                                data: {
+                                    duration: 100,
+                                    status: "success"
+                                }
+                            });
+                            
+                            return {
+                                content: [{
+                                    type: "text",
+                                    text: "Test trace sent to Sentry. Check your Sentry dashboard for:\n" +
+                                          "1. Transaction: 'Test Sentry Trace' with span 'Test async operation'\n" +
+                                          "2. Message: 'Test trace message from MCP'\n" +
+                                          "3. Breadcrumbs: 'Test trace started' and 'Test trace completed'\n" +
+                                          "4. Trace should show up in Performance monitoring"
+                                }],
+                            };
+                        }
+                    );
                 }
             );
             
@@ -219,6 +253,8 @@ const mcpHandlerFunction = async (req: Request, session: any) => {
         },
     )(req);
     });
+        }
+    );
 };
 
 // Create the handler with conditional authentication

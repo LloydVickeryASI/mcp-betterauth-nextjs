@@ -9,25 +9,32 @@ Sentry.init({
   dsn: "https://c859fbd0333a7fa199853a79c4e4692e@o4509568257556481.ingest.us.sentry.io/4509738158653440",
 
   // Define how likely traces are sampled. Adjust this value in production, or use tracesSampler for greater control.
-  tracesSampleRate: 1,
+  tracesSampleRate: 1.0,
 
-  // Enable logs to be sent to Sentry
+  // Enable logs to be sent to Sentry (beta feature)
   enableLogs: true,
+  
+  // Include request info and user IP
+  sendDefaultPii: true,
   
   // Capture all console logs
   beforeSend: (event, hint) => {
-    console.log('Sending event to Sentry (edge):', event.type || 'error', event);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Sentry Edge] Sending event:', event.type || 'error', event.event_id);
+    }
     return event;
   },
   
   // Capture console logs as breadcrumbs
   beforeBreadcrumb: (breadcrumb, hint) => {
-    console.log('Adding breadcrumb (edge):', breadcrumb);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Sentry Edge] Breadcrumb:', breadcrumb.category, breadcrumb.message);
+    }
     return breadcrumb;
   },
 
   // Setting this option to true will print useful information to the console while you're setting up Sentry.
-  debug: true,
+  debug: process.env.NODE_ENV === 'development',
 
   // Add integrations for better tracing
   integrations: [
@@ -46,4 +53,10 @@ Sentry.init({
     // Allow all external requests for maximum flexibility
     /^https:\/\//,
   ],
+  
+  // Set environment
+  environment: process.env.NODE_ENV || 'development',
+  
+  // Attach stacktrace to messages
+  attachStacktrace: true,
 });
