@@ -57,12 +57,6 @@ This is a Next.js 15 application that implements an MCP (Model Context Protocol)
          - `search_hubspot_contacts` - Search HubSpot contacts (requires HubSpot connection)
          - `list_pandadoc_documents` - List PandaDoc documents (requires PandaDoc connection)
          - `search_xero_contacts` - Search Xero accounting contacts (requires Xero connection)
-       - **System API key-based tools:**
-         - `openai_generate_text` - Generate text using OpenAI GPT models
-         - `openai_list_models` - List available OpenAI models
-         - `stripe_list_customers` - List Stripe customers
-         - `stripe_get_balance` - Get Stripe account balance
-         - `stripe_list_charges` - List recent Stripe charges
      - Uses `withMcpAuth` wrapper for token verification
      - Tools check for specific OAuth connections or system API keys before executing
      - All tools have automatic Sentry error tracking with user context
@@ -98,8 +92,6 @@ This is a Next.js 15 application that implements an MCP (Model Context Protocol)
     - `/hubspot` - HubSpot integration tools (OAuth)
     - `/pandadoc` - PandaDoc integration tools (OAuth)
     - `/xero` - Xero integration tools (OAuth)
-    - `/openai` - OpenAI integration tools (System API key)
-    - `/stripe` - Stripe integration tools (System API key)
 - Database: PostgreSQL (Neon serverless driver for Vercel deployment)
 
 ### Database Setup
@@ -156,9 +148,7 @@ Required in `.env.local`:
 - `NO_AUTH` - Set to `true` to enable no-auth mode for testing (development only)
 
 System API Keys (optional):
-- `OPENAI_API_KEY` - OpenAI API key for GPT models
 - `ANTHROPIC_API_KEY` - Anthropic API key for Claude models
-- `STRIPE_API_KEY` - Stripe API key for payment operations
 - `SENDGRID_API_KEY` - SendGrid API key for email services
 - `SLACK_API_KEY` - Slack API key for Slack integration
 - `HUBSPOT_API_KEY` - HubSpot API key (alternative to OAuth)
