@@ -24,6 +24,21 @@ pnpm run lint
 pnpm run typecheck
 ```
 
+## Vercel CLI Commands
+
+Claude Code can use the Vercel CLI to check deployment logs:
+
+```bash
+# View runtime logs (live streaming)
+vercel logs <deployment-url>
+
+# View build logs (historical)
+vercel inspect --logs <deployment-url>
+
+# List recent deployments
+vercel ls
+```
+
 ## Claude Code Hooks
 
 This project has automated quality checks configured in `.claude/settings.json`:
@@ -132,7 +147,7 @@ SELECT "userId", "providerId", "createdAt" FROM account;
 Required in `.env.local`:
 - `BETTER_AUTH_SECRET` - Secure secret key for auth
 - `DATABASE_URL` - PostgreSQL connection string (Neon or Vercel Postgres)
-- `AUTH_ISSUER` - Base URL for auth (auto-detected on Vercel)
+- `AUTH_URL` - **IMPORTANT for Vercel**: Set this to your full deployment URL (e.g., `https://mcp-betterauth-nextjs.vercel.app`) to fix OAuth metadata discovery. Without this, MCP Inspector will fail with "failed to discover OAuth metadata"
 - `MICROSOFT_CLIENT_ID` - Microsoft OAuth app client ID
 - `MICROSOFT_CLIENT_SECRET` - Microsoft OAuth app client secret
 - `MICROSOFT_TENANT_ID` - Microsoft tenant ID (default: "common")

@@ -121,7 +121,7 @@ export function mapProviderError(
         );
       
       case 429:
-        const retryAfter = error.response.headers?.['retry-after'];
+        const retryAfter = error.response?.headers?.['retry-after'];
         return new ApiError(
           ApiErrorCode.RATE_LIMITED,
           'Rate limit exceeded',
@@ -228,5 +228,42 @@ export const providerErrorMappers: Record<
     }
     
     return mapProviderError('pandadoc', operation, error);
+  },
+  
+  xero: (operation: string, error: any) => {
+    // Xero-specific error handling
+    if (error.response?.status === 403 && error.response?.data?.Message?.includes('token')) {
+      return new ApiError(
+        ApiErrorCode.TOKEN_INVALID,
+        'Xero token has expired or is invalid',
+        {
+          provider: 'xero',
+          operation,
+          originalError: error,
+          retryable: false,
+        }
+      );
+    }
+    
+    // Handle Xero validation errors
+    if (error.response?.status === 400 && error.response?.data?.Elements) {
+      const validationErrors = error.response.data.Elements
+        .flatMap((el: any) => el.ValidationErrors || [])
+        .map((err: any) => err.Message);
+        
+      return new ApiError(
+        ApiErrorCode.VALIDATION_ERROR,
+        validationErrors.join(', ') || 'Validation error',
+        {
+          provider: 'xero',
+          operation,
+          originalError: error,
+          retryable: false,
+          context: error.response.data.Elements,
+        }
+      );
+    }
+    
+    return mapProviderError('xero', operation, error);
   },
 };

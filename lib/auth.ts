@@ -108,11 +108,31 @@ export const auth = betterAuth({
           providerId: "xero",
           clientId: process.env.XERO_CLIENT_ID!,
           clientSecret: process.env.XERO_CLIENT_SECRET!,
-          authorizationUrl: "https://login.xero.com/identity/connect/authorize",
+          authorizationUrl: "https://login.xero.com/identity/connect/authorize?prompt=select_account",
           tokenUrl: "https://identity.xero.com/connect/token",
-          scopes: ["accounting.contacts.read", "offline_access"],
+          scopes: ["openid", "profile", "email", "accounting.contacts.read", "offline_access"],
           accessType: "offline",
           getUserInfo: async (tokens) => {
+            // First, try to get user info from the OpenID Connect endpoint
+            let userEmail = "";
+            let userName = "";
+            
+            try {
+              const userInfoResponse = await fetch("https://identity.xero.com/connect/userinfo", {
+                headers: {
+                  Authorization: `Bearer ${tokens.accessToken}`,
+                },
+              });
+              
+              if (userInfoResponse.ok) {
+                const userInfo = await userInfoResponse.json();
+                userEmail = userInfo.email || "";
+                userName = userInfo.name || `${userInfo.given_name || ""} ${userInfo.family_name || ""}`.trim();
+              }
+            } catch (error) {
+              console.error("Failed to fetch Xero user info:", error);
+            }
+            
             // Get the Xero connections to find the user's tenant
             const connectionsResponse = await fetch("https://api.xero.com/connections", {
               headers: {
@@ -135,8 +155,8 @@ export const auth = betterAuth({
             
             return {
               id: primaryConnection.tenantId,
-              email: "", // Xero doesn't provide email in connections
-              name: primaryConnection.tenantName || "Xero User",
+              email: userEmail || `xero-user-${primaryConnection.tenantId}@xero.local`, // Fallback email if OpenID doesn't provide one
+              name: userName || primaryConnection.tenantName || "Xero User",
               emailVerified: true,
               createdAt: new Date(),
               updatedAt: new Date(),

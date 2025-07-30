@@ -137,6 +137,36 @@ export const providerRateLimits: Record<string, RateLimiterConfig> = {
     windowMs: 60000, // 30 requests per minute
     maxBurst: 5,
   },
+  xero: {
+    maxRequests: 60,
+    windowMs: 60000, // 60 requests per minute (Xero's standard rate limit)
+    maxBurst: 5,
+  },
+  openai: {
+    maxRequests: 500,
+    windowMs: 60000, // 500 requests per minute for tier 2
+    maxBurst: 20,
+  },
+  anthropic: {
+    maxRequests: 50,
+    windowMs: 60000, // 50 requests per minute
+    maxBurst: 10,
+  },
+  stripe: {
+    maxRequests: 100,
+    windowMs: 1000, // 100 requests per second
+    maxBurst: 25,
+  },
+  sendgrid: {
+    maxRequests: 100,
+    windowMs: 1000, // 100 requests per second
+    maxBurst: 10,
+  },
+  slack: {
+    maxRequests: 50,
+    windowMs: 60000, // 50 requests per minute (Web API tier 2)
+    maxBurst: 10,
+  },
   // Add more providers as needed
 };
 

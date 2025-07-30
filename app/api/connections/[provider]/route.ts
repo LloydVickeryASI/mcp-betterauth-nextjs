@@ -19,7 +19,7 @@ export async function DELETE(
     const { provider } = await context.params;
     
     // Validate provider
-    if (!['hubspot', 'pandadoc'].includes(provider)) {
+    if (!['hubspot', 'pandadoc', 'xero'].includes(provider)) {
       return NextResponse.json({ error: "Invalid provider" }, { status: 400 });
     }
 

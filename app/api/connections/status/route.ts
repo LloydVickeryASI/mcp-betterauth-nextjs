@@ -57,9 +57,9 @@ export async function GET(req: Request) {
           // You might need to fetch this from the provider's API or store it during auth
           connection.email = account.email || session.user.email;
         } else if (account.providerId === 'xero') {
-          // Xero stores tenant name instead of email
+          // Xero stores email from OpenID Connect or uses fallback
+          connection.email = account.email || '';
           connection.name = account.name || 'Xero User';
-          connection.email = ''; // Xero doesn't provide email
         }
       }
     }

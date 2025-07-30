@@ -154,7 +154,21 @@ const handler = isNoAuthMode()
         response.headers.set('X-Test-User', TEST_USER_EMAIL);
         
         // Find the test user
-        const user = await getUserByEmail(db, TEST_USER_EMAIL);
+        let user;
+        try {
+            user = await getUserByEmail(db, TEST_USER_EMAIL);
+        } catch (error) {
+            console.error('Database error fetching test user:', error);
+            return new Response(
+                JSON.stringify({ 
+                    error: `Database error: ${error instanceof Error ? error.message : 'Unknown error'}` 
+                }), 
+                { 
+                    status: 500,
+                    headers: { 'Content-Type': 'application/json' }
+                }
+            );
+        }
         
         if (!user) {
             return new Response(

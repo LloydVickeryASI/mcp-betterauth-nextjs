@@ -222,7 +222,7 @@ export default function Connections() {
                   </p>
                   {connections.find(c => c.provider === 'xero')?.connected && (
                     <p className="text-sm text-green-600 mt-1">
-                      Connected as {connections.find(c => c.provider === 'xero')?.email || connections.find(c => c.provider === 'xero')?.name || 'Xero User'}
+                      Connected{connections.find(c => c.provider === 'xero')?.email ? ` as ${connections.find(c => c.provider === 'xero')?.email}` : connections.find(c => c.provider === 'xero')?.name ? ` to ${connections.find(c => c.provider === 'xero')?.name}` : ''}
                     </p>
                   )}
                 </div>

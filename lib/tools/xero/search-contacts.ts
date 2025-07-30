@@ -32,8 +32,8 @@ export async function searchContactsHandler(
   const db = context.db as Pool;
   const account = await getAccountByUserIdAndProvider(db, context.session.userId, 'xero');
   
-  // Xero stores the tenant ID in the account ID field
-  const tenantId = account?.accountId;
+  // Xero stores the tenant ID in the providerAccountId field
+  const tenantId = account?.providerAccountId || account?.accountId;
   if (!tenantId) {
     return {
       content: [{
@@ -55,7 +55,8 @@ export async function searchContactsHandler(
   if (query.trim()) {
     // Escape quotes to prevent API errors
     const escapedQuery = query.trim().replace(/"/g, '\\"');
-    queryParams.where = `Name.Contains("${escapedQuery}") OR EmailAddress.Contains("${escapedQuery}")`;
+    // Xero requires null guards for optional fields
+    queryParams.where = `(Name != null AND Name.Contains("${escapedQuery}")) OR (EmailAddress != null AND EmailAddress.Contains("${escapedQuery}"))`;
   }
   
   // Make the API call with Xero tenant header
@@ -65,7 +66,7 @@ export async function searchContactsHandler(
     {
       query: queryParams,
       headers: {
-        'xero-tenant-id': tenantId
+        'Xero-Tenant-Id': tenantId
       },
       cache: {
         enabled: true,
