@@ -43,7 +43,7 @@ This is a Next.js 15 application that implements an MCP (Model Context Protocol)
 
 1. **Authentication**: Better Auth (`/lib/auth.ts`) with multi-provider OAuth
    - **Primary**: Microsoft OAuth for main authentication
-   - **Secondary**: HubSpot and PandaDoc for tool-specific connections
+   - **Secondary**: HubSpot, PandaDoc, and Xero for tool-specific connections
    - Uses PostgreSQL database with Neon serverless driver
    - Sign-in page at `/sign-in` (Microsoft only)
    - Connections page at `/connections` for managing tool integrations
@@ -56,6 +56,7 @@ This is a Next.js 15 application that implements an MCP (Model Context Protocol)
        - **OAuth-based tools:**
          - `search_hubspot_contacts` - Search HubSpot contacts (requires HubSpot connection)
          - `list_pandadoc_documents` - List PandaDoc documents (requires PandaDoc connection)
+         - `search_xero_contacts` - Search Xero accounting contacts (requires Xero connection)
        - **System API key-based tools:**
          - `openai_generate_text` - Generate text using OpenAI GPT models
          - `openai_list_models` - List available OpenAI models
@@ -96,6 +97,7 @@ This is a Next.js 15 application that implements an MCP (Model Context Protocol)
     - `/provider-api-helper.ts` - Simplified API helper for provider tools
     - `/hubspot` - HubSpot integration tools (OAuth)
     - `/pandadoc` - PandaDoc integration tools (OAuth)
+    - `/xero` - Xero integration tools (OAuth)
     - `/openai` - OpenAI integration tools (System API key)
     - `/stripe` - Stripe integration tools (System API key)
 - Database: PostgreSQL (Neon serverless driver for Vercel deployment)
@@ -146,6 +148,8 @@ Required in `.env.local`:
 - `HUBSPOT_CLIENT_SECRET` - HubSpot OAuth app client secret (optional)
 - `PANDADOC_CLIENT_ID` - PandaDoc OAuth app client ID (optional)
 - `PANDADOC_CLIENT_SECRET` - PandaDoc OAuth app client secret (optional)
+- `XERO_CLIENT_ID` - Xero OAuth app client ID (optional)
+- `XERO_CLIENT_SECRET` - Xero OAuth app client secret (optional)
 - `REDIS_URL` - Optional, for SSE session resumability
 - `SENTRY_AUTH_TOKEN` - For Sentry error tracking (optional)
 - `NEXT_PUBLIC_SENTRY_DSN` - Sentry DSN for error tracking (optional)
@@ -159,6 +163,7 @@ System API Keys (optional):
 - `SLACK_API_KEY` - Slack API key for Slack integration
 - `HUBSPOT_API_KEY` - HubSpot API key (alternative to OAuth)
 - `PANDADOC_API_KEY` - PandaDoc API key (alternative to OAuth)
+- `XERO_API_KEY` - Xero API key (alternative to OAuth)
 
 ### TypeScript Configuration
 
@@ -251,7 +256,7 @@ For testing the MCP server without bearer token authentication, you can enable n
 
 1. Set `NO_AUTH=true` in your `.env.local` file
 2. Ensure the test user `lvickery@asi.co.nz` exists in your database
-3. The test user should have active OAuth connections for HubSpot/PandaDoc if you want to test those tools
+3. The test user should have active OAuth connections for HubSpot/PandaDoc/Xero if you want to test those tools
 
 **Important:**
 - No-auth mode only works in development environment (`NODE_ENV=development`)
@@ -265,7 +270,7 @@ For testing the MCP server without bearer token authentication, you can enable n
 - The secured MCP endpoint verifies tokens using Better Auth's `withMcpAuth` middleware
 - MCP handlers use `mcp-handler` package for Vercel deployment compatibility
 - Microsoft is the only provider that creates user accounts - all other providers are linked
-- Tools requiring HubSpot/PandaDoc will prompt users to connect via `/connections` page
+- Tools requiring HubSpot/PandaDoc/Xero will prompt users to connect via `/connections` page
 - Web sessions and MCP OAuth sessions are separate by design
 - Sentry error tracking is integrated into all MCP tools automatically
 - Tool schemas must be plain objects with Zod validators, not Zod objects (e.g., `{ message: z.string() }` not `z.object({ message: z.string() })`)

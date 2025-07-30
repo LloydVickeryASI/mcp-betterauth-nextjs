@@ -34,6 +34,14 @@ export async function GET(req: Request) {
         email: '',
         connectedAt: '',
         scopes: ['read+write']
+      },
+      {
+        provider: 'xero',
+        connected: false,
+        email: '',
+        name: '',
+        connectedAt: '',
+        scopes: ['accounting.contacts.read', 'offline_access']
       }
     ];
 
@@ -48,6 +56,10 @@ export async function GET(req: Request) {
         if (account.providerId === 'hubspot' || account.providerId === 'pandadoc') {
           // You might need to fetch this from the provider's API or store it during auth
           connection.email = account.email || session.user.email;
+        } else if (account.providerId === 'xero') {
+          // Xero stores tenant name instead of email
+          connection.name = account.name || 'Xero User';
+          connection.email = ''; // Xero doesn't provide email
         }
       }
     }
