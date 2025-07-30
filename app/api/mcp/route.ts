@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { createMcpHandler } from "mcp-handler";
 import { withMcpAuth } from "better-auth/plugins";
+import * as Sentry from "@sentry/nextjs";
 import { z } from "zod";
 import { registerTool } from "@/lib/tools/register-tool";
 import { registerHubSpotTools } from "@/lib/tools/hubspot";
@@ -22,34 +23,53 @@ const mcpHandlerFunction = async (req: Request, session: any) => {
     // The session from withMcpAuth contains the MCP access token session
     console.log("MCP Session:", JSON.stringify(session, null, 2));
     
-    return createMcpHandler(
-        async (server) => {
-            // Get database instance
-            const db = auth.options.database as Pool;
-            
-            // Try to get user profile information
-            let userProfile;
-            try {
-                const user = await getUserById(db, session.userId);
-                if (user) {
-                    userProfile = {
-                        id: user.id,
-                        email: user.email,
-                        name: user.name,
-                        image: user.image
-                    };
+    // Wrap the entire MCP handler in a Sentry scope
+    return await Sentry.withScope(async (scope) => {
+        // Set user context for the entire MCP session
+        if (session?.userId) {
+            scope.setUser({ id: session.userId });
+            scope.setContext("mcp_session", {
+                userId: session.userId,
+                clientId: session.clientId,
+                scopes: session.scopes || [],
+            });
+        }
+        
+        return createMcpHandler(
+            async (server) => {
+                // Get database instance
+                const db = auth.options.database as Pool;
+                
+                // Try to get user profile information
+                let userProfile;
+                try {
+                    const user = await getUserById(db, session.userId);
+                    if (user) {
+                        userProfile = {
+                            id: user.id,
+                            email: user.email,
+                            name: user.name,
+                            image: user.image
+                        };
+                        
+                        // Update Sentry user context with profile info
+                        scope.setUser({
+                            id: user.id,
+                            email: user.email,
+                            username: user.name,
+                        });
+                    }
+                } catch (error) {
+                    console.error("Error fetching user profile:", error);
                 }
-            } catch (error) {
-                console.error("Error fetching user profile:", error);
-            }
-            
-            // Store context in server for tools to access
-            (server as any).context = {
-                session,
-                db,
-                auth,
-                userProfile
-            };
+                
+                // Store context in server for tools to access
+                (server as any).context = {
+                    session,
+                    db,
+                    auth,
+                    userProfile
+                };
             
             // Register simple echo tool
             registerTool(
@@ -140,6 +160,7 @@ const mcpHandlerFunction = async (req: Request, session: any) => {
             maxDuration: 60,
         },
     )(req);
+    });
 };
 
 // Create the handler with conditional authentication

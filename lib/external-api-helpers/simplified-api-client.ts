@@ -1,4 +1,5 @@
 import { auth } from '@/lib/auth';
+import * as Sentry from '@sentry/nextjs';
 import { rateLimiter } from './rate-limiter';
 import { withRetry, providerRetryConfigs } from './retry';
 import { ApiError, mapProviderError, providerErrorMappers, ApiErrorCode } from './errors';
@@ -107,150 +108,214 @@ export class SimplifiedApiClient {
     
     // Create the request function
     const makeRequest = async (): Promise<ApiResponse<T>> => {
-      let authHeaders: Record<string, string> = {};
-      
-      // Determine authentication method
-      if (options.authMethod === 'system') {
-        // Use system API key
-        const systemApiKey = getSystemApiKey(provider);
-        if (!systemApiKey) {
-          throw new ApiError(
-            ApiErrorCode.UNAUTHORIZED,
-            'System API key not configured',
-            {
-              provider,
-              operation,
-              originalError: null,
-              retryable: false,
+      // Wrap the entire API call in a span
+      return await Sentry.startSpan(
+        {
+          name: `http.client/${provider}`,
+          attributes: {
+            "http.method": options.method || 'GET',
+            "http.url": url,
+            "http.provider": provider,
+            "api.operation": operation,
+            "api.auth_method": options.authMethod || 'oauth',
+          },
+        },
+        async (span) => {
+          let authHeaders: Record<string, string> = {};
+          
+          // Determine authentication method
+          if (options.authMethod === 'system') {
+            // Use system API key
+            const systemApiKey = getSystemApiKey(provider);
+            if (!systemApiKey) {
+              throw new ApiError(
+                ApiErrorCode.UNAUTHORIZED,
+                'System API key not configured',
+                {
+                  provider,
+                  operation,
+                  originalError: null,
+                  retryable: false,
+                }
+              );
             }
-          );
-        }
-        authHeaders = formatApiKeyHeader(provider, systemApiKey);
-      } else {
-        // Default to OAuth
-        // Get access token from the database
-        // Note: Better Auth will handle refresh automatically when we call their API endpoints
-        const db = auth.options.database as Pool;
-        const account = accountId
-          ? await getAccountById(db, accountId)
-          : await getAccountByUserIdAndProvider(db, userId, provider);
-        
-        if (!account?.accessToken) {
-          throw new ApiError(
-            ApiErrorCode.UNAUTHORIZED,
-            'No access token available',
-            {
-              provider,
-              operation,
-              originalError: null,
-              retryable: false,
+            authHeaders = formatApiKeyHeader(provider, systemApiKey);
+          } else {
+            // Default to OAuth
+            // Get access token from the database
+            // Note: Better Auth will handle refresh automatically when we call their API endpoints
+            const db = auth.options.database as Pool;
+            const account = accountId
+              ? await getAccountById(db, accountId)
+              : await getAccountByUserIdAndProvider(db, userId, provider);
+            
+            if (!account?.accessToken) {
+              throw new ApiError(
+                ApiErrorCode.UNAUTHORIZED,
+                'No access token available',
+                {
+                  provider,
+                  operation,
+                  originalError: null,
+                  retryable: false,
+                }
+              );
             }
-          );
-        }
-        
-        authHeaders = { 'Authorization': `Bearer ${account.accessToken}` };
-      }
-      
-      // Build headers
-      const headers = {
-        ...authHeaders,
-        'Content-Type': 'application/json',
-        ...options.headers,
-      };
-      
-      // Build URL with query params
-      const urlObj = new URL(url);
-      if (options.query) {
-        Object.entries(options.query).forEach(([key, value]) => {
-          urlObj.searchParams.append(key, String(value));
-        });
-      }
-      
-      // Log request
-      const logResponse = apiLogger.createRequestLogger({
-        provider,
-        operation,
-        userId,
-      });
-      
-      const requestLog = {
-        timestamp: new Date(),
-        provider,
-        operation,
-        method: options.method || 'GET',
-        url: urlObj.toString(),
-        headers: this.sanitizeHeaders(headers),
-        body: options.body,
-      };
-      
-      const logComplete = logResponse(requestLog);
-      
-      try {
-        // Make the request
-        const response = await fetch(urlObj.toString(), {
-          method: options.method || 'GET',
-          headers,
-          body: options.body ? JSON.stringify(options.body) : undefined,
-          signal: AbortSignal.timeout(30000), // 30 second timeout
-        });
-        
-        // Parse response
-        const responseData = await this.parseResponse<T>(response);
-        
-        // Log response
-        logComplete({
-          ...requestLog,
-          duration: 0, // Will be calculated by logger
-          status: response.status,
-          responseHeaders: Object.fromEntries(response.headers.entries()),
-          responseBody: responseData,
-        });
-        
-        // Handle errors
-        if (!response.ok) {
-          const errorMapper = providerErrorMappers[provider] || mapProviderError;
-          throw errorMapper(operation, {
-            response: {
-              status: response.status,
-              data: responseData,
-              headers: Object.fromEntries(response.headers.entries()),
-            },
+            
+            authHeaders = { 'Authorization': `Bearer ${account.accessToken}` };
+          }
+          
+          // Build headers
+          const headers = {
+            ...authHeaders,
+            'Content-Type': 'application/json',
+            ...options.headers,
+          };
+          
+          // Build URL with query params
+          const urlObj = new URL(url);
+          if (options.query) {
+            Object.entries(options.query).forEach(([key, value]) => {
+              urlObj.searchParams.append(key, String(value));
+            });
+          }
+          
+          // Update span with full URL
+          span.setAttributes({
+            "http.full_url": urlObj.toString(),
           });
+          
+          // Log request
+          const logResponse = apiLogger.createRequestLogger({
+            provider,
+            operation,
+            userId,
+          });
+          
+          const requestLog = {
+            timestamp: new Date(),
+            provider,
+            operation,
+            method: options.method || 'GET',
+            url: urlObj.toString(),
+            headers: this.sanitizeHeaders(headers),
+            body: options.body,
+          };
+          
+          const logComplete = logResponse(requestLog);
+          
+          try {
+            // Make the request
+            const response = await fetch(urlObj.toString(), {
+              method: options.method || 'GET',
+              headers,
+              body: options.body ? JSON.stringify(options.body) : undefined,
+              signal: AbortSignal.timeout(30000), // 30 second timeout
+            });
+            
+            // Parse response
+            const responseData = await this.parseResponse<T>(response);
+            
+            // Log response
+            logComplete({
+              ...requestLog,
+              duration: 0, // Will be calculated by logger
+              status: response.status,
+              responseHeaders: Object.fromEntries(response.headers.entries()),
+              responseBody: responseData,
+            });
+            
+            // Update span with response status
+            span.setAttributes({
+              "http.status_code": response.status,
+            });
+            
+            // Handle errors
+            if (!response.ok) {
+              span.setStatus({ code: 2 }); // error
+              
+              // Add error response as span event
+              try {
+                const errorStr = JSON.stringify(responseData);
+                span.addEvent("api.response.error", {
+                  "response.body": errorStr.slice(0, 1000), // Limit size
+                  "response.status": response.status,
+                  "response.truncated": errorStr.length > 1000,
+                });
+              } catch (e) {
+                span.addEvent("api.response.error", {
+                  "response.body": "[Unable to serialize error response]",
+                  "response.status": response.status,
+                  "serialize.error": String(e),
+                });
+              }
+              
+              const errorMapper = providerErrorMappers[provider] || mapProviderError;
+              throw errorMapper(operation, {
+                response: {
+                  status: response.status,
+                  data: responseData,
+                  headers: Object.fromEntries(response.headers.entries()),
+                },
+              });
+            }
+            
+            span.setStatus({ code: 1 }); // success
+            
+            // Add successful response as span event (with size limit)
+            try {
+              const responseStr = JSON.stringify(responseData);
+              span.addEvent("api.response.success", {
+                "response.preview": responseStr.slice(0, 1000),
+                "response.size": responseStr.length,
+                "response.truncated": responseStr.length > 1000,
+              });
+            } catch (e) {
+              // Handle circular references or other stringify errors
+              span.addEvent("api.response.success", {
+                "response.preview": "[Unable to serialize response]",
+                "response.error": String(e),
+              });
+            }
+            
+            const result: ApiResponse<T> = {
+              data: responseData,
+              status: response.status,
+              headers: Object.fromEntries(response.headers.entries()),
+            };
+            
+            // Cache successful GET responses
+            if (cacheKey && options.cache?.enabled) {
+              cacheManager.getCache(provider).set(
+                cacheKey,
+                result,
+                options.cache.ttlMs
+              );
+            }
+            
+            return result;
+          } catch (error) {
+            span.setStatus({ code: 2 }); // error
+            span.recordException(error as Error);
+            
+            // Log error
+            logComplete({
+              ...requestLog,
+              duration: 0,
+              status: 0,
+              error,
+            });
+            
+            // Map to ApiError if needed
+            if (error instanceof ApiError) {
+              throw error;
+            }
+            
+            const errorMapper = providerErrorMappers[provider] || mapProviderError;
+            throw errorMapper(operation, error);
+          }
         }
-        
-        const result: ApiResponse<T> = {
-          data: responseData,
-          status: response.status,
-          headers: Object.fromEntries(response.headers.entries()),
-        };
-        
-        // Cache successful GET responses
-        if (cacheKey && options.cache?.enabled) {
-          cacheManager.getCache(provider).set(
-            cacheKey,
-            result,
-            options.cache.ttlMs
-          );
-        }
-        
-        return result;
-      } catch (error) {
-        // Log error
-        logComplete({
-          ...requestLog,
-          duration: 0,
-          status: 0,
-          error,
-        });
-        
-        // Map to ApiError if needed
-        if (error instanceof ApiError) {
-          throw error;
-        }
-        
-        const errorMapper = providerErrorMappers[provider] || mapProviderError;
-        throw errorMapper(operation, error);
-      }
+      );
     };
     
     // Apply circuit breaker
