@@ -26,16 +26,6 @@ export interface ProviderConfig {
 }
 
 export const providers: Record<string, ProviderConfig> = {
-  openai: {
-    authMethods: {
-      systemApiKey: {
-        envVar: "OPENAI_API_KEY",
-        headerName: "Authorization",
-        headerFormat: "Bearer {key}"
-      }
-    },
-    baseUrl: "https://api.openai.com/v1"
-  },
   anthropic: {
     authMethods: {
       systemApiKey: {
@@ -71,16 +61,6 @@ export const providers: Record<string, ProviderConfig> = {
       }
     },
     baseUrl: "https://api.pandadoc.com/public/v1"
-  },
-  stripe: {
-    authMethods: {
-      systemApiKey: {
-        envVar: "STRIPE_API_KEY",
-        headerName: "Authorization",
-        headerFormat: "Bearer {key}"
-      }
-    },
-    baseUrl: "https://api.stripe.com/v1"
   },
   sendgrid: {
     authMethods: {
