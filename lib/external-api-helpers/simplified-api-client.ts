@@ -8,6 +8,7 @@ import { cacheManager, CacheKeyBuilder } from './cache';
 import { getProviderConfig, formatApiKeyHeader, getSystemApiKey } from '@/lib/providers/config';
 import { getAccountById, getAccountByUserIdAndProvider } from '@/lib/db-queries';
 import { Pool } from '@neondatabase/serverless';
+import { getBaseUrl } from '@/lib/get-base-url';
 
 // Legacy provider endpoints for backward compatibility
 // New providers should be defined in /lib/providers/config.ts
@@ -36,6 +37,7 @@ export interface ApiRequestOptions {
   skipRetry?: boolean;
   skipCircuitBreaker?: boolean;
   authMethod?: 'oauth' | 'system';
+  userToken?: string; // Bearer token for refresh endpoint
 }
 
 export interface ApiResponse<T = any> {
@@ -129,7 +131,6 @@ export class SimplifiedApiClient {
       } else {
         // Default to OAuth
         // Get access token from the database
-        // Note: Better Auth will handle refresh automatically when we call their API endpoints
         const db = auth.options.database as Pool;
         const account = accountId
           ? await getAccountById(db, accountId)
@@ -148,7 +149,37 @@ export class SimplifiedApiClient {
           );
         }
         
-        authHeaders = { 'Authorization': `Bearer ${account.accessToken}` };
+        // Check if token is expired and refresh if needed
+        let accessToken = account.accessToken;
+        if (account.accessTokenExpiresAt && new Date(account.accessTokenExpiresAt) <= new Date()) {
+          // Token is expired, try to refresh it
+          if (account.refreshToken) {
+            try {
+              const refreshResponse = await fetch(`${getBaseUrl()}/api/auth/refresh/${provider}`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${options.userToken}`,
+                  'Content-Type': 'application/json',
+                },
+              });
+              
+              if (refreshResponse.ok) {
+                const refreshData = await refreshResponse.json();
+                accessToken = refreshData.accessToken;
+                console.log(`Refreshed expired token for provider ${provider}`);
+              } else {
+                console.warn(`Failed to refresh token for provider ${provider}, using potentially expired token`);
+              }
+            } catch (refreshError) {
+              console.error(`Error refreshing token for provider ${provider}:`, refreshError);
+              // Continue with the expired token - let the API call fail naturally
+            }
+          } else {
+            console.warn(`Token expired for provider ${provider} but no refresh token available`);
+          }
+        }
+        
+        authHeaders = { 'Authorization': `Bearer ${accessToken}` };
       }
       
       // Build headers
