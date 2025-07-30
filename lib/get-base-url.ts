@@ -24,8 +24,15 @@ export function getBaseUrl(): string {
   // Server environment
   
   // Vercel preview/production deployments
+  
+  // Allow explicit override for production domains
+  if (process.env.AUTH_URL) {
+    return process.env.AUTH_URL;
+  }
+  
   // VERCEL_URL is automatically set by Vercel and includes the deployment URL
   // It's NOT available in local development
+  // Note: This will be the internal Vercel URL, not your custom domain
   if (process.env.VERCEL_URL) {
     return `https://${process.env.VERCEL_URL}`;
   }

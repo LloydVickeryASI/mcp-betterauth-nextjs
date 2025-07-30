@@ -175,6 +175,23 @@ The application automatically detects the correct base URL for OAuth redirects:
 
 3. **Production**: Uses your production domain
    - Vercel sets `VERCEL_URL` to your production domain
+   - **Important**: If using a custom domain, set `AUTH_URL` in Vercel environment variables
+
+### Custom Domain Configuration
+
+When using a custom domain on Vercel (e.g., `mcp-betterauth-nextjs.vercel.app` instead of the auto-generated URL), you must:
+
+1. Set `AUTH_URL` environment variable in Vercel to your custom domain:
+   ```
+   AUTH_URL=https://mcp-betterauth-nextjs.vercel.app
+   ```
+
+2. This ensures OAuth metadata URLs match the domain you're accessing from
+
+Without this, the OAuth flow will fail because:
+- You access via: `https://mcp-betterauth-nextjs.vercel.app`
+- But metadata points to: `https://mcp-betterauth-nextjs-[hash].vercel.app`
+- This origin mismatch causes authentication to fail
 
 ### OAuth Provider Setup for Preview Deployments
 

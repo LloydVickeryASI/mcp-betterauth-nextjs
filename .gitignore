@@ -27,6 +27,7 @@ yarn-error.log*
 
 # local env files
 .env*.local
+.env.local.bak
 
 # vercel
 .vercel
@@ -40,3 +41,13 @@ next-env.d.ts
 *.db-journal
 # Sentry Config File
 .env.sentry-build-plugin
+
+# logs
+server.log
+
+# database migrations  
+better-auth_migrations/
+
+# scripts
+scripts/check-db.js
+scripts/init-db.js
