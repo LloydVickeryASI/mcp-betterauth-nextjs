@@ -50,66 +50,71 @@ export function registerTool(
     description,
     schema,
     async (args: any) => {
-      // Start a new trace for each tool call
-      return await Sentry.startSpan(
-        {
-          name: `mcp.tool/${name}`,
-          op: "mcp.tool",
-          forceTransaction: true, // This creates a new transaction/trace
-          attributes: {
-            "mcp.tool.name": name,
-            ...extractMcpParameters(args),
-          },
-        },
-        async (span) => {
-            // Use withScope to isolate context changes to this specific tool execution
-            return await Sentry.withScope(async (scope) => {
-              // Get the context from the server's stored session
-              const context = (server as any).context as ToolContext;
-              
-              // Set Sentry user context on the isolated scope
-              if (context.userProfile) {
-                scope.setUser({
-                  id: context.userProfile.id,
-                  email: context.userProfile.email,
-                  username: context.userProfile.name,
-                });
-              }
-              
-              // Add additional context to the isolated scope
-              scope.setContext("mcp_session", {
-                userId: context.session.userId,
-                clientId: context.session.clientId,
-                scopes: context.session.scopes,
-              });
-              
-              scope.setTag("mcp.tool", name);
-
-              try {
-                const result = await handler(args, context);
-                span.setStatus({ code: 1 }); // success
-                return result;
-              } catch (err) {
-                span.setStatus({ code: 2 }); // error
-                span.recordException(err as Error);
-                
-                const errorMessage = handleMcpError(err);
-                return {
-                  content: [{
-                    type: "text",
-                    text: JSON.stringify({
-                      error: true,
-                      message: errorMessage,
-                      details: err instanceof Error ? err.message : String(err)
-                    }, null, 2)
-                  }],
-                  isError: true
-                };
-              }
-              // No need for finally block - scope is automatically cleaned up
+      try {
+        // Get the context from the server's stored session
+        const context = (server as any).context as ToolContext;
+        
+        // Use withScope to isolate context changes to this specific tool execution
+        return await Sentry.withScope(async (scope) => {
+          // Set Sentry user context on the isolated scope
+          if (context.userProfile) {
+            scope.setUser({
+              id: context.userProfile.id,
+              email: context.userProfile.email,
+              username: context.userProfile.name,
             });
-        }
-      );
+          }
+          
+          // Add additional context to the isolated scope
+          scope.setContext("mcp_session", {
+            userId: context.session.userId,
+            clientId: context.session.clientId,
+            scopes: context.session.scopes,
+          });
+          
+          scope.setTag("mcp.tool", name);
+          
+          // Add breadcrumb for tool execution
+          Sentry.addBreadcrumb({
+            message: `Executing MCP tool: ${name}`,
+            category: "mcp.tool",
+            level: "info",
+            data: extractMcpParameters(args),
+          });
+
+          try {
+            const result = await handler(args, context);
+            return result;
+          } catch (err) {
+            const errorMessage = handleMcpError(err);
+            return {
+              content: [{
+                type: "text",
+                text: JSON.stringify({
+                  error: true,
+                  message: errorMessage,
+                  details: err instanceof Error ? err.message : String(err)
+                }, null, 2)
+              }],
+              isError: true
+            };
+          }
+        });
+      } catch (outerErr) {
+        // Fallback error handling if Sentry itself fails
+        console.error("Error in registerTool wrapper:", outerErr);
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              error: true,
+              message: "Internal server error",
+              details: outerErr instanceof Error ? outerErr.message : String(outerErr)
+            }, null, 2)
+          }],
+          isError: true
+        };
+      }
     }
   );
 }

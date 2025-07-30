@@ -41,16 +41,7 @@ export function createProviderTool<TArgs = any>(
   const requiresUserAuth = config.requiresUserAuth ?? (authMethod === 'oauth');
   
   const wrappedHandler = async (args: TArgs, context: ToolContext) => {
-    // Wrap authentication check in a span
-    return await Sentry.startSpan(
-      {
-        name: `mcp.auth/${config.provider}`,
-        attributes: {
-          "mcp.provider": config.provider,
-          "mcp.auth.method": authMethod,
-        },
-      },
-      async () => {
+    try {
         const providerConfig = getProviderConfig(config.provider);
         
         if (!providerConfig) {
@@ -112,53 +103,51 @@ export function createProviderTool<TArgs = any>(
           authMethod: actualAuthMethod
         };
         
-        // Wrap actual tool execution in its own span
-        return await Sentry.startSpan(
-          {
-            name: `mcp.provider/${config.provider}/${config.name}`,
-            attributes: {
-              "mcp.provider": config.provider,
-              "mcp.auth.type": actualAuthMethod,
-              "mcp.tool.name": config.name,
+        try {
+          // Add breadcrumb for provider tool execution
+          Sentry.addBreadcrumb({
+            message: `Executing provider tool: ${config.provider}/${config.name}`,
+            category: "mcp.provider",
+            level: "info",
+            data: {
+              provider: config.provider,
+              authType: actualAuthMethod,
+              tool: config.name,
             },
-          },
-          async (span) => {
-            try {
-              // Call the actual tool handler
-              const result = await config.handler(args, providerContext);
-              span.setStatus({ code: 1 }); // success
-              return result;
-            } catch (error: any) {
-              span.setStatus({ code: 2 }); // error
-              span.recordException(error);
-              
-              // Handle token expiration errors consistently (OAuth only)
-              if (actualAuthMethod === 'oauth' && 
-                  (error?.code === 'UNAUTHORIZED' || error?.code === 'TOKEN_EXPIRED' || 
-                   error?.response?.status === 401 || error?.status === 401)) {
-                const connectionsUrl = `${context.auth.options.baseURL}/connections`;
-                return {
-                  content: [{
-                    type: "text",
-                    text: JSON.stringify({
-                      error: true,
-                      authenticated: false,
-                      message: `${capitalizeProvider(config.provider)} token expired. Please reconnect your ${capitalizeProvider(config.provider)} account on the connections page.`,
-                      connectionsUrl: connectionsUrl,
-                      provider: config.provider
-                    }, null, 2)
-                  }],
-                  isError: true
-                } satisfies AuthRequiredResponse;
-              }
-              
-              // Re-throw other errors to be handled by registerTool's error handler
-              throw error;
-            }
+          });
+          
+          // Call the actual tool handler
+          const result = await config.handler(args, providerContext);
+          return result;
+        } catch (error: any) {
+          // Handle token expiration errors consistently (OAuth only)
+          if (actualAuthMethod === 'oauth' && 
+              (error?.code === 'UNAUTHORIZED' || error?.code === 'TOKEN_EXPIRED' || 
+               error?.response?.status === 401 || error?.status === 401)) {
+            const connectionsUrl = `${context.auth.options.baseURL}/connections`;
+            return {
+              content: [{
+                type: "text",
+                text: JSON.stringify({
+                  error: true,
+                  authenticated: false,
+                  message: `${capitalizeProvider(config.provider)} token expired. Please reconnect your ${capitalizeProvider(config.provider)} account on the connections page.`,
+                  connectionsUrl: connectionsUrl,
+                  provider: config.provider
+                }, null, 2)
+              }],
+              isError: true
+            } satisfies AuthRequiredResponse;
           }
-        );
+          
+          // Re-throw other errors to be handled by registerTool's error handler
+          throw error;
+        }
+      } catch (outerError) {
+        // Log unexpected errors but still throw them
+        console.error("Error in createProviderTool:", outerError);
+        throw outerError;
       }
-    );
   };
   
   // Register the tool with wrapped handler
