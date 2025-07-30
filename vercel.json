@@ -1,0 +1,12 @@
+{
+  "buildCommand": "pnpm run build",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "framework": "nextjs",
+  "regions": ["iad1"],
+  "functions": {
+    "app/api/mcp/route.ts": {
+      "maxDuration": 30
+    }
+  },
+  "crons": []
+}

@@ -1,6 +1,22 @@
 import {withSentryConfig} from '@sentry/nextjs';
 /** @type {import('next').NextConfig} */
-const nextConfig = {}
+const nextConfig = {
+  output: 'standalone',
+  experimental: {
+    // Enable partial prerendering for faster builds
+    ppr: true,
+    // Use newer bundler for faster builds
+    turbo: {
+      resolveAlias: {
+        canvas: './empty-module.ts',
+      },
+    },
+  },
+  // Optimize production builds
+  productionBrowserSourceMaps: false,
+  // Enable SWC minification
+  swcMinify: true,
+}
 
 export default withSentryConfig(nextConfig, {
 // For all available options, see:
@@ -16,7 +32,7 @@ silent: !process.env.CI,
 // https://docs.sentry.io/platforms/javascript/guides/nextjs/manual-setup/
 
 // Upload a larger set of source maps for prettier stack traces (increases build time)
-widenClientFileUpload: true,
+widenClientFileUpload: false,
 
 // Route browser requests to Sentry through a Next.js rewrite to circumvent ad-blockers.
 // This can increase your server load as well as your hosting bill.
