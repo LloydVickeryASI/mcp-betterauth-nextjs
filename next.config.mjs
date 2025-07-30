@@ -1,16 +1,6 @@
 import {withSentryConfig} from '@sentry/nextjs';
 /** @type {import('next').NextConfig} */
-const nextConfig = {
-  output: 'standalone',
-  // Optimize production builds
-  productionBrowserSourceMaps: false,
-  // Turbopack configuration for faster builds
-  turbopack: {
-    resolveAlias: {
-      canvas: './empty-module.ts',
-    },
-  },
-}
+const nextConfig = {}
 
 // Conditionally wrap with Sentry based on environment variable
 const config = process.env.DISABLE_SENTRY_UPLOAD === 'true' 
