@@ -45,7 +45,7 @@ export async function deleteAccount(db: Pool, userId: string, providerId: string
     'DELETE FROM account WHERE "userId" = $1 AND "providerId" = $2',
     [userId, providerId]
   );
-  return result.rowCount;
+  return result.rowCount || 0;
 }
 
 export async function getAccountsByUserId(db: Pool, userId: string) {
