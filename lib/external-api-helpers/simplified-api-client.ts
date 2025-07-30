@@ -233,6 +233,23 @@ export class SimplifiedApiClient {
             // Handle errors
             if (!response.ok) {
               span.setStatus({ code: 2 }); // error
+              
+              // Add error response as span event
+              try {
+                const errorStr = JSON.stringify(responseData);
+                span.addEvent("api.response.error", {
+                  "response.body": errorStr.slice(0, 1000), // Limit size
+                  "response.status": response.status,
+                  "response.truncated": errorStr.length > 1000,
+                });
+              } catch (e) {
+                span.addEvent("api.response.error", {
+                  "response.body": "[Unable to serialize error response]",
+                  "response.status": response.status,
+                  "serialize.error": String(e),
+                });
+              }
+              
               const errorMapper = providerErrorMappers[provider] || mapProviderError;
               throw errorMapper(operation, {
                 response: {
@@ -244,6 +261,22 @@ export class SimplifiedApiClient {
             }
             
             span.setStatus({ code: 1 }); // success
+            
+            // Add successful response as span event (with size limit)
+            try {
+              const responseStr = JSON.stringify(responseData);
+              span.addEvent("api.response.success", {
+                "response.preview": responseStr.slice(0, 1000),
+                "response.size": responseStr.length,
+                "response.truncated": responseStr.length > 1000,
+              });
+            } catch (e) {
+              // Handle circular references or other stringify errors
+              span.addEvent("api.response.success", {
+                "response.preview": "[Unable to serialize response]",
+                "response.error": String(e),
+              });
+            }
             
             const result: ApiResponse<T> = {
               data: responseData,
