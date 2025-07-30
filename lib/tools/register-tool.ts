@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/nextjs";
 import { handleMcpError } from "@/lib/sentry-error-handler";
+import { createLogger } from "@/lib/logger";
 
 export interface ToolContext {
   session: {
@@ -87,41 +88,34 @@ export function registerTool(
               
               scope.setTag("mcp.tool", name);
               
-              // Add breadcrumb for tool execution
-              Sentry.addBreadcrumb({
-                message: `Executing MCP tool: ${name}`,
-                category: "mcp.tool",
-                level: "info",
-                data: extractMcpParameters(args),
+              // Create tool-specific logger
+              const toolLogger = createLogger({
+                component: 'mcp.tool',
+                tool: name,
+                userId: context.session?.userId,
               });
+              
+              // Log tool execution
+              toolLogger.info(`Executing MCP tool: ${name}`, extractMcpParameters(args));
 
               try {
                 const startTime = Date.now();
                 const result = await handler(args, context);
                 
-                // Add success breadcrumb
-                Sentry.addBreadcrumb({
-                  message: `MCP tool completed: ${name}`,
-                  category: "mcp.tool",
-                  level: "info",
-                  data: {
-                    duration_ms: Date.now() - startTime,
-                    success: true,
-                  },
+                // Log successful completion
+                toolLogger.info(`MCP tool completed: ${name}`, {
+                  duration_ms: Date.now() - startTime,
+                  success: true,
                 });
                 
                 return result;
               } catch (err) {
                 const errorMessage = handleMcpError(err);
                 
-                // Add error breadcrumb
-                Sentry.addBreadcrumb({
-                  message: `MCP tool failed: ${name}`,
-                  category: "mcp.tool",
-                  level: "error",
-                  data: {
-                    error: err instanceof Error ? err.message : String(err),
-                  },
+                // Log error
+                toolLogger.error(`MCP tool failed: ${name}`, err, {
+                  errorMessage,
+                  toolArgs: args,
                 });
                 
                 return {

@@ -11,6 +11,7 @@ import { isNoAuthMode, TEST_USER_EMAIL } from "@/lib/auth-mode";
 import { logSystemApiKeyStatus } from "@/lib/providers/validate";
 import { getUserById, getAccountByUserIdAndProvider, getUserByEmail, getSessionByUserId } from "@/lib/db-queries";
 import { Pool } from "@neondatabase/serverless";
+import { mcpLogger } from "@/lib/logger";
 
 // Log system API key status on startup (only once)
 let hasLoggedApiKeyStatus = false;
@@ -21,7 +22,12 @@ if (!hasLoggedApiKeyStatus && process.env.NODE_ENV === 'development') {
 
 const mcpHandlerFunction = async (req: Request, session: any) => {
     // The session from withMcpAuth contains the MCP access token session
-    console.log("MCP Session:", JSON.stringify(session, null, 2));
+    mcpLogger.info("MCP Request received", {
+        userId: session?.userId,
+        clientId: session?.clientId,
+        method: req.method,
+        url: req.url,
+    });
     
     // Create a trace for the entire MCP request
     return await Sentry.startSpan(

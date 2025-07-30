@@ -10,6 +10,7 @@ import { getProviderConfig, formatApiKeyHeader, getSystemApiKey } from '@/lib/pr
 import { getAccountById, getAccountByUserIdAndProvider } from '@/lib/db-queries';
 import { Pool } from '@neondatabase/serverless';
 import { getBaseUrl } from '@/lib/get-base-url';
+import { createLogger } from '@/lib/logger';
 
 // Legacy provider endpoints for backward compatibility
 // New providers should be defined in /lib/providers/config.ts
@@ -168,16 +169,20 @@ export class SimplifiedApiClient {
                   if (refreshResponse.ok) {
                     const refreshData = await refreshResponse.json();
                     accessToken = refreshData.accessToken;
-                    console.log(`Refreshed expired token for provider ${provider}`);
+                    const logger = createLogger({ component: 'api.auth', provider, userId });
+                    logger.info('Refreshed expired token', { provider });
                   } else {
-                    console.warn(`Failed to refresh token for provider ${provider}, using potentially expired token`);
+                    const logger = createLogger({ component: 'api.auth', provider, userId });
+                    logger.warn('Failed to refresh token, using potentially expired token', { provider });
                   }
                 } catch (refreshError) {
-                  console.error(`Error refreshing token for provider ${provider}:`, refreshError);
+                  const logger = createLogger({ component: 'api.auth', provider, userId });
+                  logger.error('Error refreshing token', refreshError, { provider });
                   // Continue with the expired token - let the API call fail naturally
                 }
               } else {
-                console.warn(`Token expired for provider ${provider} but no refresh token available`);
+                const logger = createLogger({ component: 'api.auth', provider, userId });
+                logger.warn('Token expired but no refresh token available', { provider });
               }
             }
             

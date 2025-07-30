@@ -3,9 +3,16 @@ import * as Sentry from "@sentry/nextjs";
 import { registerTool, type ToolContext } from "./register-tool";
 import { getProviderConfig, hasSystemApiKey, type ProviderConfig } from "@/lib/providers/config";
 import { auth } from "@/lib/auth";
+import { createLogger } from "@/lib/logger";
 
 // Helper function to check if a provider is connected via OAuth
 async function isProviderConnected(userId: string, providerId: string) {
+  const logger = createLogger({ 
+    component: 'provider.auth',
+    provider: providerId,
+    userId 
+  });
+  
   try {
     const accounts = await auth.api.listUserAccounts({
       query: {
@@ -13,28 +20,29 @@ async function isProviderConnected(userId: string, providerId: string) {
       }
     });
     
-    console.log(`[DEBUG] Checking ${providerId} connection for user ${userId}`);
-    console.log(`[DEBUG] Total accounts found: ${accounts?.length || 0}`);
-    console.log(`[DEBUG] Account providers:`, accounts?.map(acc => acc.provider));
+    logger.debug(`Checking ${providerId} connection`, {
+      totalAccounts: accounts?.length || 0,
+      providers: accounts?.map(acc => acc.provider),
+    });
     
     // Filter for the specific provider
     const account = accounts?.filter(acc => acc.provider === providerId);
     
-    console.log(`[DEBUG] Filtered accounts for ${providerId}:`, account?.length || 0);
-    
     if (account && account.length > 0) {
       const acc = account[0];
-      console.log(`[DEBUG] Found ${providerId} account with ID:`, acc.accountId);
+      logger.info(`Found ${providerId} connection`, {
+        accountId: acc.accountId,
+      });
       return {
         connected: true,
         accountId: acc.accountId,
       };
     }
     
-    console.log(`[DEBUG] No ${providerId} account found`);
+    logger.debug(`No ${providerId} connection found`);
     return { connected: false };
   } catch (error) {
-    console.error(`Failed to check ${providerId} connection:`, error);
+    logger.error(`Failed to check ${providerId} connection`, error);
     return { connected: false };
   }
 }
@@ -139,17 +147,16 @@ export function createProviderTool<TArgs = any>(
         };
         
         try {
-          // Add breadcrumb for provider tool execution
-          Sentry.addBreadcrumb({
-            message: `Executing provider tool: ${config.provider}/${config.name}`,
-            category: "mcp.provider",
-            level: "info",
-            data: {
-              provider: config.provider,
-              authType: actualAuthMethod,
-              tool: config.name,
-            },
+          // Log provider tool execution
+          const providerLogger = createLogger({
+            component: 'mcp.provider',
+            provider: config.provider,
+            tool: config.name,
+            authMethod: actualAuthMethod,
+            userId: context.session?.userId,
           });
+          
+          providerLogger.info(`Executing provider tool: ${config.provider}/${config.name}`);
           
           // Call the actual tool handler
           const result = await config.handler(args, providerContext);
