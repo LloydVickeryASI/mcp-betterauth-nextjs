@@ -53,10 +53,10 @@ export async function searchContactsHandler(
   
   // Add where clause if query is provided
   if (query.trim()) {
-    // Escape quotes to prevent API errors
-    const escapedQuery = query.trim().replace(/"/g, '\\"');
+    // The API helper will handle URL encoding, so we don't need to escape quotes
+    const searchQuery = query.trim();
     // Xero requires null guards for optional fields
-    queryParams.where = `(Name != null AND Name.Contains("${escapedQuery}")) OR (EmailAddress != null AND EmailAddress.Contains("${escapedQuery}"))`;
+    queryParams.where = `(Name != null AND Name.Contains("${searchQuery}")) OR (EmailAddress != null AND EmailAddress.Contains("${searchQuery}"))`;
   }
   
   // Make the API call with Xero tenant header
