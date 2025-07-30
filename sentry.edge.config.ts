@@ -57,6 +57,9 @@ Sentry.init({
   // Set environment
   environment: process.env.NODE_ENV || 'development',
   
+  // Set release version
+  release: `mcp-betterauth-nextjs@${process.env.npm_package_version || '1.0.0'}`,
+  
   // Attach stacktrace to messages
   attachStacktrace: true,
 });
