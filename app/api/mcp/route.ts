@@ -86,6 +86,61 @@ const mcpHandlerFunction = async (req: Request, session: any) => {
                 }
             );
             
+            // Register test trace tool to diagnose Sentry
+            registerTool(
+                server,
+                "test_sentry_trace",
+                "Test Sentry trace capture",
+                {},
+                async () => {
+                    // Log to console to verify tool is called
+                    console.log("test_sentry_trace called");
+                    
+                    // Create a manual transaction
+                    const transaction = Sentry.startTransaction({
+                        op: "mcp.test",
+                        name: "Test Sentry Trace",
+                    });
+                    
+                    // Set transaction on scope
+                    Sentry.getCurrentScope().setSpan(transaction);
+                    
+                    // Add breadcrumb
+                    Sentry.addBreadcrumb({
+                        message: "Test trace started",
+                        category: "test",
+                        level: "info",
+                        timestamp: Date.now() / 1000,
+                    });
+                    
+                    // Create a child span
+                    const span = transaction.startChild({
+                        op: "test.operation",
+                        description: "Test operation within trace",
+                    });
+                    
+                    // Simulate some work
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    
+                    // Capture a message
+                    Sentry.captureMessage("Test trace message", "info");
+                    
+                    // Finish the span and transaction
+                    span.finish();
+                    transaction.finish();
+                    
+                    return {
+                        content: [{
+                            type: "text",
+                            text: "Test trace sent to Sentry. Check your Sentry dashboard for:\n" +
+                                  "1. Transaction: 'Test Sentry Trace'\n" +
+                                  "2. Message: 'Test trace message'\n" +
+                                  "3. Breadcrumb: 'Test trace started'"
+                        }],
+                    };
+                }
+            );
+            
             // Register auth status tool
             registerTool(
                 server,
@@ -137,6 +192,9 @@ const mcpHandlerFunction = async (req: Request, session: any) => {
                 tools: {
                     echo: {
                         description: "Echo a message",
+                    },
+                    test_sentry_trace: {
+                        description: "Test Sentry trace capture and logging",
                     },
                     search_hubspot_contacts: {
                         description: "Search HubSpot contacts by email (exact match for full emails, partial match for fragments)",

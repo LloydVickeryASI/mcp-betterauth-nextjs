@@ -13,9 +13,21 @@ Sentry.init({
 
   // Enable logs to be sent to Sentry
   enableLogs: true,
+  
+  // Capture all console logs
+  beforeSend: (event, hint) => {
+    console.log('Sending event to Sentry (edge):', event.type || 'error', event);
+    return event;
+  },
+  
+  // Capture console logs as breadcrumbs
+  beforeBreadcrumb: (breadcrumb, hint) => {
+    console.log('Adding breadcrumb (edge):', breadcrumb);
+    return breadcrumb;
+  },
 
   // Setting this option to true will print useful information to the console while you're setting up Sentry.
-  debug: false,
+  debug: true,
 
   // Add integrations for better tracing
   integrations: [

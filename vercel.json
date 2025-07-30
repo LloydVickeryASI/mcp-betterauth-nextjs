@@ -1,0 +1,18 @@
+{
+  "headers": [
+    {
+      "source": "/api/mcp",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex"
+        }
+      ]
+    }
+  ],
+  "functions": {
+    "app/api/mcp/route.ts": {
+      "maxDuration": 60
+    }
+  }
+}

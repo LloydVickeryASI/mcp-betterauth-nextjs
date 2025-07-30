@@ -12,14 +12,31 @@ Sentry.init({
 
   // Enable logs to be sent to Sentry
   enableLogs: true,
+  
+  // Capture all console logs
+  beforeSend: (event, hint) => {
+    // Log the event being sent to Sentry for debugging
+    console.log('Sending event to Sentry:', event.type || 'error', event);
+    return event;
+  },
+  
+  // Capture console logs as breadcrumbs
+  beforeBreadcrumb: (breadcrumb, hint) => {
+    console.log('Adding breadcrumb:', breadcrumb);
+    return breadcrumb;
+  },
 
   // Setting this option to true will print useful information to the console while you're setting up Sentry.
-  debug: false,
+  debug: true,
 
   // Add integrations for better tracing
   integrations: [
     // Note: httpIntegration is not available in @sentry/nextjs v9
     // It's included by default in the Next.js SDK
+    // Add console integration to capture all console logs
+    Sentry.consoleSandbox(),
+    // Add extra error data
+    Sentry.extraErrorDataIntegration(),
   ],
 
   // Propagate traces to all external APIs using wildcard
