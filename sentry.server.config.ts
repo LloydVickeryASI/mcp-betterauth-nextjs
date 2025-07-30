@@ -15,4 +15,22 @@ Sentry.init({
 
   // Setting this option to true will print useful information to the console while you're setting up Sentry.
   debug: false,
+
+  // Add integrations for better tracing
+  integrations: [
+    // Note: httpIntegration is not available in @sentry/nextjs v9
+    // It's included by default in the Next.js SDK
+  ],
+
+  // Propagate traces to all external APIs using wildcard
+  tracePropagationTargets: [
+    // Match all external API calls
+    /^https:\/\/api\./,
+    // Also match any .com API endpoints
+    /\.com\/api\//,
+    // Specific providers that don't follow the api. pattern
+    "app.pandadoc.com",
+    // Allow all external requests for maximum flexibility
+    /^https:\/\//,
+  ],
 });

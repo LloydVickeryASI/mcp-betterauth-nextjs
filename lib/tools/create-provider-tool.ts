@@ -1,4 +1,5 @@
 import { z } from "zod";
+import * as Sentry from "@sentry/nextjs";
 import { registerTool, type ToolContext } from "./register-tool";
 import { isProviderConnected } from "@/lib/external-api-helpers";
 import { getProviderConfig, hasSystemApiKey, type ProviderConfig } from "@/lib/providers/config";
@@ -40,94 +41,113 @@ export function createProviderTool<TArgs = any>(
   const requiresUserAuth = config.requiresUserAuth ?? (authMethod === 'oauth');
   
   const wrappedHandler = async (args: TArgs, context: ToolContext) => {
-    const providerConfig = getProviderConfig(config.provider);
-    
-    if (!providerConfig) {
-      throw new Error(`Unknown provider: ${config.provider}`);
-    }
-    
-    let connectionStatus: { connected: boolean; accountId?: string; authMethod?: 'oauth' | 'system' } = { connected: false };
-    let actualAuthMethod: 'oauth' | 'system' | undefined;
-    
-    // Determine which auth method to use
-    if (authMethod === 'oauth' || authMethod === 'auto') {
-      // Check OAuth connection
-      const oauthStatus = await isProviderConnected(context.session.userId, config.provider);
-      if (oauthStatus.connected) {
-        connectionStatus = { ...oauthStatus, authMethod: 'oauth' };
-        actualAuthMethod = 'oauth';
-      }
-    }
-    
-    if (!actualAuthMethod && (authMethod === 'system' || authMethod === 'auto')) {
-      // Check system API key
-      if (hasSystemApiKey(config.provider)) {
-        connectionStatus = { connected: true, authMethod: 'system' };
-        actualAuthMethod = 'system';
-      }
-    }
-    
-    // Handle authentication failure
-    if (!connectionStatus.connected || !actualAuthMethod) {
-      const errorMessage = generateAuthErrorMessage(
-        config.provider,
-        authMethod,
-        providerConfig
-      );
-      
-      const connectionsUrl = `${context.auth.options.baseURL}/connections`;
-      
-      return {
-        content: [{
-          type: "text",
-          text: JSON.stringify({
-            error: true,
-            authenticated: false,
-            message: errorMessage,
-            connectionsUrl: authMethod !== 'system' ? connectionsUrl : undefined,
-            provider: config.provider,
-            authMethod: authMethod
-          }, null, 2)
-        }],
-        isError: true
-      } satisfies AuthRequiredResponse;
-    }
-    
-    // Create enhanced context with provider info
-    const providerContext: ProviderToolContext = {
-      ...context,
-      accountId: connectionStatus.accountId,
-      provider: config.provider,
-      authMethod: actualAuthMethod
-    };
-    
     try {
-      // Call the actual tool handler
-      return await config.handler(args, providerContext);
-    } catch (error: any) {
-      // Handle token expiration errors consistently (OAuth only)
-      if (actualAuthMethod === 'oauth' && 
-          (error?.code === 'UNAUTHORIZED' || error?.code === 'TOKEN_EXPIRED' || 
-           error?.response?.status === 401 || error?.status === 401)) {
-        const connectionsUrl = `${context.auth.options.baseURL}/connections`;
-        return {
-          content: [{
-            type: "text",
-            text: JSON.stringify({
-              error: true,
-              authenticated: false,
-              message: `${capitalizeProvider(config.provider)} token expired. Please reconnect your ${capitalizeProvider(config.provider)} account on the connections page.`,
-              connectionsUrl: connectionsUrl,
-              provider: config.provider
-            }, null, 2)
-          }],
-          isError: true
-        } satisfies AuthRequiredResponse;
+        const providerConfig = getProviderConfig(config.provider);
+        
+        if (!providerConfig) {
+          throw new Error(`Unknown provider: ${config.provider}`);
+        }
+        
+        let connectionStatus: { connected: boolean; accountId?: string; authMethod?: 'oauth' | 'system' } = { connected: false };
+        let actualAuthMethod: 'oauth' | 'system' | undefined;
+        
+        // Determine which auth method to use
+        if (authMethod === 'oauth' || authMethod === 'auto') {
+          // Check OAuth connection
+          const oauthStatus = await isProviderConnected(context.session.userId, config.provider);
+          if (oauthStatus.connected) {
+            connectionStatus = { ...oauthStatus, authMethod: 'oauth' };
+            actualAuthMethod = 'oauth';
+          }
+        }
+        
+        if (!actualAuthMethod && (authMethod === 'system' || authMethod === 'auto')) {
+          // Check system API key
+          if (hasSystemApiKey(config.provider)) {
+            connectionStatus = { connected: true, authMethod: 'system' };
+            actualAuthMethod = 'system';
+          }
+        }
+        
+        // Handle authentication failure
+        if (!connectionStatus.connected || !actualAuthMethod) {
+          const errorMessage = generateAuthErrorMessage(
+            config.provider,
+            authMethod,
+            providerConfig
+          );
+          
+          const connectionsUrl = `${context.auth.options.baseURL}/connections`;
+          
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                error: true,
+                authenticated: false,
+                message: errorMessage,
+                connectionsUrl: authMethod !== 'system' ? connectionsUrl : undefined,
+                provider: config.provider,
+                authMethod: authMethod
+              }, null, 2)
+            }],
+            isError: true
+          } satisfies AuthRequiredResponse;
+        }
+        
+        // Create enhanced context with provider info
+        const providerContext: ProviderToolContext = {
+          ...context,
+          accountId: connectionStatus.accountId,
+          provider: config.provider,
+          authMethod: actualAuthMethod
+        };
+        
+        try {
+          // Add breadcrumb for provider tool execution
+          Sentry.addBreadcrumb({
+            message: `Executing provider tool: ${config.provider}/${config.name}`,
+            category: "mcp.provider",
+            level: "info",
+            data: {
+              provider: config.provider,
+              authType: actualAuthMethod,
+              tool: config.name,
+            },
+          });
+          
+          // Call the actual tool handler
+          const result = await config.handler(args, providerContext);
+          return result;
+        } catch (error: any) {
+          // Handle token expiration errors consistently (OAuth only)
+          if (actualAuthMethod === 'oauth' && 
+              (error?.code === 'UNAUTHORIZED' || error?.code === 'TOKEN_EXPIRED' || 
+               error?.response?.status === 401 || error?.status === 401)) {
+            const connectionsUrl = `${context.auth.options.baseURL}/connections`;
+            return {
+              content: [{
+                type: "text",
+                text: JSON.stringify({
+                  error: true,
+                  authenticated: false,
+                  message: `${capitalizeProvider(config.provider)} token expired. Please reconnect your ${capitalizeProvider(config.provider)} account on the connections page.`,
+                  connectionsUrl: connectionsUrl,
+                  provider: config.provider
+                }, null, 2)
+              }],
+              isError: true
+            } satisfies AuthRequiredResponse;
+          }
+          
+          // Re-throw other errors to be handled by registerTool's error handler
+          throw error;
+        }
+      } catch (outerError) {
+        // Log unexpected errors but still throw them
+        console.error("Error in createProviderTool:", outerError);
+        throw outerError;
       }
-      
-      // Re-throw other errors to be handled by registerTool's error handler
-      throw error;
-    }
   };
   
   // Register the tool with wrapped handler
