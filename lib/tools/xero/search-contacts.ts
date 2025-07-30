@@ -53,7 +53,9 @@ export async function searchContactsHandler(
   
   // Add where clause if query is provided
   if (query.trim()) {
-    queryParams.where = `Name.Contains("${query.trim()}") OR EmailAddress.Contains("${query.trim()}")`;
+    // Escape quotes to prevent API errors
+    const escapedQuery = query.trim().replace(/"/g, '\\"');
+    queryParams.where = `Name.Contains("${escapedQuery}") OR EmailAddress.Contains("${escapedQuery}")`;
   }
   
   // Make the API call with Xero tenant header
