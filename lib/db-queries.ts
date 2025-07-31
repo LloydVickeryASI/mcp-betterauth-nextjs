@@ -56,20 +56,12 @@ export async function getAccountsByUserId(db: Pool, userId: string) {
   return result.rows;
 }
 
-export async function isProviderConnected(userId: string, providerId: string): Promise<{ connected: boolean; accountId?: string }> {
-  const db = new Pool({
-    connectionString: process.env.DATABASE_URL!,
-  });
+export async function isProviderConnected(db: Pool, userId: string, providerId: string): Promise<{ connected: boolean; accountId?: string }> {
+  const account = await getAccountByUserIdAndProvider(db, userId, providerId);
   
-  try {
-    const account = await getAccountByUserIdAndProvider(db, userId, providerId);
-    
-    if (account && account.accessToken) {
-      return { connected: true, accountId: account.id };
-    }
-    
-    return { connected: false };
-  } finally {
-    await db.end();
+  if (account && account.accessToken) {
+    return { connected: true, accountId: account.id };
   }
+  
+  return { connected: false };
 }

@@ -17,9 +17,11 @@ A streamlined set of helpers for managing external API calls that leverages Bett
 
 ```typescript
 import { apiClient, isProviderConnected } from "@/lib/external-api-helpers";
+import { Pool } from "@neondatabase/serverless";
 
 // Check if provider is connected (returns connection status and account ID)
-const connectionStatus = await isProviderConnected(userId, 'hubspot');
+const db = new Pool({ connectionString: process.env.DATABASE_URL! });
+const connectionStatus = await isProviderConnected(db, userId, 'hubspot');
 
 if (!connectionStatus.connected) {
   // Handle not connected
@@ -203,7 +205,7 @@ export const searchContactsHandler = async (
   context: ToolContext
 ) => {
   // Check if provider is connected
-  const isConnected = await isProviderConnected(context.session.userId, 'hubspot');
+  const isConnected = await isProviderConnected(context.db, context.session.userId, 'hubspot');
   
   if (!isConnected) {
     const connectionsUrl = `${context.auth.options.baseURL}/connections`;
