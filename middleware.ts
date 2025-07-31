@@ -12,8 +12,13 @@ function getAllowedOrigins(): string[] {
     return allowedOrigins.split(',').map(origin => origin.trim());
   }
   
-  // Default allowed origins for development
+  // For development, be more permissive with localhost
   // In production, ALLOWED_ORIGINS should be explicitly set
+  if (process.env.NODE_ENV === 'development') {
+    return ['*']; // Special marker for dev mode
+  }
+  
+  // Production fallback
   return [
     'http://localhost:3000',
     'http://127.0.0.1:3000',
@@ -27,7 +32,14 @@ function getAllowedOrigins(): string[] {
  */
 function isOriginAllowed(origin: string | null, allowedOrigins: string[]): boolean {
   if (!origin) return false;
-  return allowedOrigins.includes(origin);
+  
+  // In development, allow all localhost/127.0.0.1 origins
+  if (process.env.NODE_ENV === 'development' && 
+      (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
+    return true;
+  }
+  
+  return allowedOrigins.includes(origin) || allowedOrigins.includes('*');
 }
 
 /**
@@ -44,8 +56,9 @@ export async function middleware(request: NextRequest) {
   // Let the connections page handle its own authentication
   // The MCP OAuth flow might use different session management
 
-  // Handle CORS for /api/auth/* routes
-  if (request.nextUrl.pathname.startsWith('/api/auth')) {
+  // Handle CORS for /api/auth/* routes AND /.well-known/* routes (for OAuth metadata)
+  if (request.nextUrl.pathname.startsWith('/api/auth') || 
+      request.nextUrl.pathname.startsWith('/.well-known/')) {
     // Debug logging
     console.log(`[Middleware] ${request.method} ${request.nextUrl.pathname}${request.nextUrl.search}`)
     
@@ -112,5 +125,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/api/:path*']
+  matcher: ['/api/:path*', '/.well-known/:path*']
 }
