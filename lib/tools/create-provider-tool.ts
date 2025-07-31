@@ -88,7 +88,7 @@ function capitalizeProvider(provider: string): string {
 function generateAuthErrorMessage(
   provider: string, 
   authMethod: AuthMethod, 
-  providerConfig: ProviderConfig | null
+  providerConfig: ProviderConfig | null | undefined
 ): string {
   const providerName = capitalizeProvider(provider);
   
