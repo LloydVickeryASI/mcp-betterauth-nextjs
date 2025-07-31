@@ -7,6 +7,37 @@ export interface OAuthStateData {
 }
 
 /**
+ * Validates that all critical OAuth secrets are present in the environment
+ * This should be called at application startup
+ */
+export function validateOAuthSecrets(): void {
+  if (!process.env.STATE_SECRET) {
+    throw new Error(
+      "STATE_SECRET environment variable is required for OAuth security. " +
+      "Please set this to a cryptographically secure random string."
+    );
+  }
+  
+  if (process.env.STATE_SECRET === "dev-secret-please-change") {
+    throw new Error(
+      "STATE_SECRET cannot use the default development value. " +
+      "Please set this to a cryptographically secure random string."
+    );
+  }
+}
+
+/**
+ * Gets the STATE_SECRET from environment, throwing if not present
+ */
+function getStateSecret(): string {
+  const secret = process.env.STATE_SECRET;
+  if (!secret) {
+    throw new Error("STATE_SECRET environment variable is not set");
+  }
+  return secret;
+}
+
+/**
  * Generate a JWT-encoded state parameter for OAuth flows
  * This allows us to securely pass the origin URL through the OAuth flow
  */
@@ -18,7 +49,7 @@ export function generateOAuthState(data: Omit<OAuthStateData, "timestamp">): str
 
   return jwt.sign(
     stateData,
-    process.env.STATE_SECRET || "dev-secret-please-change",
+    getStateSecret(),
     { expiresIn: "10m" }
   );
 }
@@ -30,7 +61,7 @@ export function verifyOAuthState(state: string): OAuthStateData | null {
   try {
     const decoded = jwt.verify(
       state,
-      process.env.STATE_SECRET || "dev-secret-please-change"
+      getStateSecret()
     ) as OAuthStateData;
 
     // Validate timestamp (prevent replay attacks)
