@@ -11,6 +11,7 @@ import { isNoAuthMode, TEST_USER_EMAIL } from "@/lib/auth-mode";
 import { logSystemApiKeyStatus } from "@/lib/providers/validate";
 import { getUserById, getAccountByUserIdAndProvider, getUserByEmail, getSessionByUserId } from "@/lib/db-queries";
 import { Pool } from "@neondatabase/serverless";
+import { mcpLogger } from "@/lib/logger";
 
 // Log system API key status on startup (only once)
 let hasLoggedApiKeyStatus = false;
@@ -21,10 +22,28 @@ if (!hasLoggedApiKeyStatus && process.env.NODE_ENV === 'development') {
 
 const mcpHandlerFunction = async (req: Request, session: any) => {
     // The session from withMcpAuth contains the MCP access token session
-    console.log("MCP Session:", JSON.stringify(session, null, 2));
+    mcpLogger.info(mcpLogger.fmt`MCP Request received from user ${session?.userId}`, {
+        userId: session?.userId,
+        clientId: session?.clientId,
+        method: req.method,
+        url: req.url,
+    });
     
-    // Wrap the entire MCP handler in a Sentry scope
-    return await Sentry.withScope(async (scope) => {
+    // Create a trace for the entire MCP request
+    return await Sentry.startSpan(
+        {
+            op: "mcp.request",
+            name: "MCP Request Handler",
+            attributes: {
+                "mcp.session.user_id": session?.userId,
+                "mcp.session.client_id": session?.clientId,
+                "http.method": req.method,
+                "http.url": req.url,
+            }
+        },
+        async () => {
+            // Wrap the entire MCP handler in a Sentry scope
+            return await Sentry.withScope(async (scope) => {
         // Set user context for the entire MCP session
         if (session?.userId) {
             scope.setUser({ id: session.userId });
@@ -86,6 +105,82 @@ const mcpHandlerFunction = async (req: Request, session: any) => {
                 }
             );
             
+            // Register test trace tool to diagnose Sentry
+            registerTool(
+                server,
+                "test_sentry_trace",
+                "Test Sentry trace capture",
+                {},
+                async () => {
+                    // Log to console to verify tool is called
+                    console.log("test_sentry_trace called");
+                    
+                    // Use the new startSpan API for Sentry v9
+                    return await Sentry.startSpan(
+                        {
+                            op: "mcp.test",
+                            name: "Test Sentry Trace",
+                            attributes: {
+                                "mcp.tool": "test_sentry_trace",
+                                "test.type": "manual",
+                            }
+                        },
+                        async (span) => {
+                            // Add breadcrumb
+                            Sentry.addBreadcrumb({
+                                message: "Test trace started",
+                                category: "test",
+                                level: "info",
+                                data: {
+                                    tool: "test_sentry_trace",
+                                    timestamp: new Date().toISOString()
+                                }
+                            });
+                            
+                            // Simulate some async work with a child span
+                            await Sentry.startSpan(
+                                {
+                                    op: "test.operation",
+                                    name: "Test async operation",
+                                    attributes: {
+                                        "operation.type": "sleep",
+                                        "operation.duration": 100
+                                    }
+                                },
+                                async () => {
+                                    await new Promise(resolve => setTimeout(resolve, 100));
+                                }
+                            );
+                            
+                            // Capture a test message
+                            Sentry.captureMessage("Test trace message from MCP", "info");
+                            
+                            // Add another breadcrumb
+                            Sentry.addBreadcrumb({
+                                message: "Test trace completed",
+                                category: "test",
+                                level: "info",
+                                data: {
+                                    duration: 100,
+                                    status: "success"
+                                }
+                            });
+                            
+                            return {
+                                content: [{
+                                    type: "text",
+                                    text: "Test trace sent to Sentry. Check your Sentry dashboard for:\n" +
+                                          "1. Transaction: 'Test Sentry Trace' with span 'Test async operation'\n" +
+                                          "2. Message: 'Test trace message from MCP'\n" +
+                                          "3. Breadcrumbs: 'Test trace started' and 'Test trace completed'\n" +
+                                          "4. Trace should show up in Performance monitoring"
+                                }],
+                            };
+                        }
+                    );
+                }
+            );
+            
             // Register auth status tool
             registerTool(
                 server,
@@ -138,6 +233,9 @@ const mcpHandlerFunction = async (req: Request, session: any) => {
                     echo: {
                         description: "Echo a message",
                     },
+                    test_sentry_trace: {
+                        description: "Test Sentry trace capture and logging",
+                    },
                     search_hubspot_contacts: {
                         description: "Search HubSpot contacts by email (exact match for full emails, partial match for fragments)",
                     },
@@ -161,6 +259,8 @@ const mcpHandlerFunction = async (req: Request, session: any) => {
         },
     )(req);
     });
+        }
+    );
 };
 
 // Create the handler with conditional authentication
