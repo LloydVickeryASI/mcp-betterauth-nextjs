@@ -54,11 +54,17 @@ cp .env.example .env.local
    - Microsoft OAuth: `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_TENANT_ID`
    - HubSpot OAuth: `HUBSPOT_CLIENT_ID`, `HUBSPOT_CLIENT_SECRET`
    - PandaDoc OAuth: `PANDADOC_CLIENT_ID`, `PANDADOC_CLIENT_SECRET`
+   - **CORS Configuration**: `ALLOWED_ORIGINS` (comma-separated list of allowed origins for auth endpoints)
    
    **Note**: The base URL is automatically detected:
    - Local development: `http://localhost:3000`
    - Vercel deployments: Uses `VERCEL_URL` automatically
    - Override local URL with `LOCAL_URL` in `.env.local` if needed
+   
+   **Security**: For production deployments, always set `ALLOWED_ORIGINS` to restrict CORS access to your auth endpoints. Example:
+   ```
+   ALLOWED_ORIGINS=https://yourdomain.com,https://app.yourdomain.com
+   ```
 
 5. Run the development server:
 ```bash
