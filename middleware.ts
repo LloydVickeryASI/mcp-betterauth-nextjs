@@ -87,7 +87,7 @@ export async function middleware(request: NextRequest) {
     const allowedOrigins = getAllowedOrigins();
     const requestOrigin = request.headers.get('origin');
     
-    // For OAuth metadata endpoints, be more permissive to support MCP Inspector
+    // For OAuth metadata endpoints, allow all origins for team flexibility
     const isOAuthMetadataEndpoint = request.nextUrl.pathname.includes('/.well-known/') ||
                                    request.nextUrl.pathname.includes('/mcp/register') ||
                                    request.nextUrl.pathname.includes('/mcp/authorize') ||
@@ -95,16 +95,10 @@ export async function middleware(request: NextRequest) {
     
     let allowedOriginHeader = getAllowedOriginHeader(requestOrigin, allowedOrigins);
     
-    // For OAuth endpoints, allow MCP Inspector and other OAuth clients in production
-    if (isOAuthMetadataEndpoint && !allowedOriginHeader && requestOrigin) {
-      // Allow common MCP Inspector patterns and OAuth client origins
-      if (requestOrigin.includes('localhost') || 
-          requestOrigin.includes('127.0.0.1') ||
-          requestOrigin.includes('mcp-inspector') ||
-          // Allow any HTTPS origin for OAuth metadata (secure origins only)
-          requestOrigin.startsWith('https://')) {
-        allowedOriginHeader = requestOrigin;
-      }
+    // For OAuth endpoints, allow any origin since OAuth provides its own security
+    // This enables team members to use various MCP clients from different locations
+    if (isOAuthMetadataEndpoint && requestOrigin) {
+      allowedOriginHeader = requestOrigin; // Allow any origin for OAuth endpoints
     }
     
     const response = NextResponse.next()
