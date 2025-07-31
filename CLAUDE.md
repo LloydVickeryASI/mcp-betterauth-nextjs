@@ -72,6 +72,7 @@ This is a Next.js 15 application that implements an MCP (Model Context Protocol)
          - `search_hubspot_contacts` - Search HubSpot contacts (requires HubSpot connection)
          - `list_pandadoc_documents` - List PandaDoc documents (requires PandaDoc connection)
          - `search_xero_contacts` - Search Xero accounting contacts (requires Xero connection)
+         - `report_issue` - Report bugs/features to GitHub with automatic context and Sentry integration
      - Uses `withMcpAuth` wrapper for token verification
      - Tools check for specific OAuth connections or system API keys before executing
      - All tools have automatic Sentry error tracking with user context
@@ -107,6 +108,7 @@ This is a Next.js 15 application that implements an MCP (Model Context Protocol)
     - `/hubspot` - HubSpot integration tools (OAuth)
     - `/pandadoc` - PandaDoc integration tools (OAuth)
     - `/xero` - Xero integration tools (OAuth)
+    - `/feedback` - Feedback and issue reporting tools
 - Database: PostgreSQL (Neon serverless driver for Vercel deployment)
 
 ### Database Setup
@@ -169,6 +171,9 @@ System API Keys (optional):
 - `HUBSPOT_API_KEY` - HubSpot API key (alternative to OAuth)
 - `PANDADOC_API_KEY` - PandaDoc API key (alternative to OAuth)
 - `XERO_API_KEY` - Xero API key (alternative to OAuth)
+- `GITHUB_TOKEN` - GitHub personal access token for creating issues via the feedback tool (optional)
+- `GITHUB_REPO_OWNER` - GitHub repository owner/username for issue creation (optional, defaults to "your-github-username")
+- `GITHUB_REPO_NAME` - GitHub repository name for issue creation (optional, defaults to "mcp-betterauth-nextjs")
 
 ### TypeScript Configuration
 
@@ -351,3 +356,63 @@ curl -X POST "https://api.hubapi.com/crm/v3/objects/contacts/search" \
 ```
 
 Note: If the token has expired, you'll need to refresh it through the `/connections` page or use the refresh token if available.
+
+## Feedback and Issue Reporting
+
+The project includes a built-in feedback system that allows users and LLMs to report issues directly to GitHub:
+
+### Features
+
+1. **Automatic Context Collection**: When creating an issue, the tool automatically includes:
+   - User information (email, ID)
+   - Session details (client ID, creation time)
+   - Connected OAuth providers
+   - Sentry event ID (if reporting an error)
+   - Tool information (if a specific tool failed)
+
+2. **Sentry Integration**: When tools encounter errors:
+   - Errors are automatically sent to Sentry with full context
+   - The error response includes a Sentry event ID
+   - Users can report the issue using: `report_issue` with the `sentryEventId`
+
+3. **GitHub Issue Creation**: Issues are created with:
+   - Appropriate labels (bug, enhancement, improvement, mcp-reported)
+   - Structured format with all context information
+   - Direct link to Sentry event (if applicable)
+
+### Setup
+
+1. Create a GitHub personal access token with `repo` scope
+2. Add the following to your `.env.local`:
+   ```
+   GITHUB_TOKEN=your_github_personal_access_token
+   GITHUB_REPO_OWNER=your-github-username
+   GITHUB_REPO_NAME=mcp-betterauth-nextjs
+   ```
+
+### Usage Examples
+
+```bash
+# Report a bug with Sentry event ID
+npx @modelcontextprotocol/inspector --cli http://localhost:3000/api/mcp \
+  --transport http --method tools/call --tool-name report_issue \
+  --tool-arg title="HubSpot search failing" \
+  --tool-arg description="Getting 401 error when searching contacts" \
+  --tool-arg type="bug" \
+  --tool-arg sentryEventId="abc123..." \
+  --tool-arg toolName="search_hubspot_contacts"
+
+# Request a new feature
+npx @modelcontextprotocol/inspector --cli http://localhost:3000/api/mcp \
+  --transport http --method tools/call --tool-name report_issue \
+  --tool-arg title="Add Salesforce integration" \
+  --tool-arg description="Would be great to have Salesforce CRM integration" \
+  --tool-arg type="feature"
+```
+
+### Error Flow
+
+1. Tool fails → Error sent to Sentry → Event ID returned
+2. Error response includes the event ID and hint to use `report_issue`
+3. User/LLM can call `report_issue` with the event ID
+4. GitHub issue created with full context and Sentry link

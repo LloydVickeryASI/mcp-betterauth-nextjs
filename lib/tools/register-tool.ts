@@ -111,12 +111,13 @@ export function registerTool(
                 
                 return result;
               } catch (err) {
-                const errorMessage = handleMcpError(err);
+                const errorResponse = handleMcpError(err);
                 
                 // Log error
-                toolLogger.error(toolLogger.fmt`MCP tool failed: ${name} - ${errorMessage}`, {
+                toolLogger.error(toolLogger.fmt`MCP tool failed: ${name} - ${errorResponse.message}`, {
                   error: err instanceof Error ? err.message : String(err),
-                  errorMessage,
+                  errorMessage: errorResponse.message,
+                  sentryEventId: errorResponse.eventId,
                   toolArgs: args,
                 });
                 
@@ -125,8 +126,11 @@ export function registerTool(
                     type: "text",
                     text: JSON.stringify({
                       error: true,
-                      message: errorMessage,
-                      details: err instanceof Error ? err.message : String(err)
+                      message: errorResponse.message,
+                      sentryEventId: errorResponse.eventId,
+                      toolName: name,
+                      details: err instanceof Error ? err.message : String(err),
+                      reportingHint: `Use the report_issue tool with sentryEventId: "${errorResponse.eventId}" to report this error`
                     }, null, 2)
                   }],
                   isError: true

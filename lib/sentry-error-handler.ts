@@ -1,17 +1,28 @@
 import * as Sentry from "@sentry/nextjs";
 
-export function handleMcpError(err: unknown): string {
+export interface MscpErrorResponse {
+  message: string;
+  eventId: string;
+}
+
+export function handleMcpError(err: unknown): MscpErrorResponse {
   const eventId = Sentry.captureException(err);
 
-  return [
+  const message = [
     "**Error**",
     "There was a problem with your request.",
-    "Please report the following to the user:",
+    "",
     `**Event ID**: ${eventId}`,
+    "",
+    "You can report this issue using:",
+    `\`report_issue\` tool with sentryEventId: "${eventId}"`,
+    "",
     process.env.NODE_ENV !== "production"
       ? err instanceof Error
-        ? err.message
-        : String(err)
+        ? `**Details**: ${err.message}`
+        : `**Details**: ${String(err)}`
       : "",
-  ].join("\n\n");
+  ].join("\n");
+
+  return { message, eventId };
 }

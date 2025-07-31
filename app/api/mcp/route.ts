@@ -7,6 +7,7 @@ import { registerTool } from "@/lib/tools/register-tool";
 import { registerHubSpotTools } from "@/lib/tools/hubspot";
 import { registerPandaDocTools } from "@/lib/tools/pandadoc";
 import { registerXeroTools } from "@/lib/tools/xero";
+import { registerReportIssueTool } from "@/lib/tools/feedback/report-issue";
 import { isNoAuthMode, TEST_USER_EMAIL } from "@/lib/auth-mode";
 import { logSystemApiKeyStatus } from "@/lib/providers/validate";
 import { getUserById, getAccountByUserIdAndProvider, getUserByEmail, getSessionByUserId } from "@/lib/db-queries";
@@ -226,6 +227,9 @@ const mcpHandlerFunction = async (req: Request, session: any) => {
             registerHubSpotTools(server);
             registerPandaDocTools(server);
             registerXeroTools(server);
+            
+            // Register feedback tool
+            registerReportIssueTool(server);
         },
         {
             capabilities: {
@@ -247,6 +251,9 @@ const mcpHandlerFunction = async (req: Request, session: any) => {
                     },
                     search_xero_contacts: {
                         description: "Search Xero accounting contacts by name or email address",
+                    },
+                    report_issue: {
+                        description: "Report an issue or feature request to the GitHub repository with automatic context and error tracking",
                     },
                 },
             },
