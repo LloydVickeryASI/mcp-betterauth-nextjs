@@ -110,9 +110,9 @@ export async function createUpdatePurchaseOrderHandler(
       endpoint,
       params.purchaseOrderId ? 'update_purchase_order' : 'create_purchase_order',
       {
-        body: {
-          PurchaseOrders: [purchaseOrderPayload]
-        },
+        PurchaseOrders: [purchaseOrderPayload]
+      },
+      {
         headers: {
           'Xero-Tenant-Id': tenantId
         }

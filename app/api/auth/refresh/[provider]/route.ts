@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { getAccountByUserIdAndProvider } from '@/lib/db-queries';
-import { Pool } from '@neondatabase/serverless';
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL!,
-});
+import { neon } from '@neondatabase/serverless';
 
 export async function POST(
   request: NextRequest,
@@ -38,8 +34,9 @@ export async function POST(
     }
 
     // Get the account for this provider
+    const sql = neon(process.env.DATABASE_URL!);
     const account = await getAccountByUserIdAndProvider(
-      pool,
+      sql as any,
       sessionResponse.user.id,
       provider
     );
@@ -101,33 +98,24 @@ export async function POST(
       const refreshedTokens = await refreshResponse.json();
       
       // Update the account with new tokens
-      const updateQuery = `
-        UPDATE account 
-        SET 
-          "accessToken" = $1,
-          "refreshToken" = $2,
-          "accessTokenExpiresAt" = $3,
-          "refreshTokenExpiresAt" = $4,
-          "updatedAt" = CURRENT_TIMESTAMP
-        WHERE 
-          "userId" = $5 
-          AND "providerId" = $6
-      `;
-
       // Calculate expiration times based on expires_in
       const now = new Date();
       const accessTokenExpiresAt = refreshedTokens.expires_in 
         ? new Date(now.getTime() + refreshedTokens.expires_in * 1000)
         : null;
       
-      await pool.query(updateQuery, [
-        refreshedTokens.access_token,
-        refreshedTokens.refresh_token || account.refreshToken,
-        accessTokenExpiresAt,
-        null, // refreshTokenExpiresAt - we don't know when the refresh token expires
-        sessionResponse.user.id,
-        provider
-      ]);
+      await sql`
+        UPDATE account 
+        SET 
+          "accessToken" = ${refreshedTokens.access_token},
+          "refreshToken" = ${refreshedTokens.refresh_token || account.refreshToken},
+          "accessTokenExpiresAt" = ${accessTokenExpiresAt},
+          "refreshTokenExpiresAt" = ${null},
+          "updatedAt" = CURRENT_TIMESTAMP
+        WHERE 
+          "userId" = ${sessionResponse.user.id} 
+          AND "providerId" = ${provider}
+      `;
 
       return NextResponse.json({
         accessToken: refreshedTokens.access_token,
@@ -153,7 +141,5 @@ export async function POST(
       { error: 'Internal server error' },
       { status: 500 }
     );
-  } finally {
-    await pool.end();
   }
 }

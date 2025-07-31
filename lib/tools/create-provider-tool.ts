@@ -4,9 +4,10 @@ import { registerTool, type ToolContext } from "./register-tool";
 import { getProviderConfig, hasSystemApiKey, type ProviderConfig } from "@/lib/providers/config";
 import { auth } from "@/lib/auth";
 import { createLogger } from "@/lib/logger";
+import { getAccountByUserIdAndProvider } from "@/lib/db-queries";
 
 // Helper function to check if a provider is connected via OAuth
-async function isProviderConnected(userId: string, providerId: string) {
+async function isProviderConnected(userId: string, providerId: string, db: any) {
   const logger = createLogger({ 
     component: 'provider.auth',
     provider: providerId,
@@ -14,28 +15,20 @@ async function isProviderConnected(userId: string, providerId: string) {
   });
   
   try {
-    const accounts = await auth.api.listUserAccounts({
-      query: {
-        userId,
-      }
-    });
+    const account = await getAccountByUserIdAndProvider(db, userId, providerId);
     
     logger.debug(logger.fmt`Checking ${providerId} connection for user ${userId}`, {
-      totalAccounts: accounts?.length || 0,
-      providers: accounts?.map(acc => acc.provider),
+      hasAccount: !!account,
+      hasAccessToken: !!(account && account.accessToken),
     });
     
-    // Filter for the specific provider
-    const account = accounts?.filter(acc => acc.provider === providerId);
-    
-    if (account && account.length > 0) {
-      const acc = account[0];
-      logger.info(logger.fmt`Found ${providerId} connection with account ${acc.accountId}`, {
-        accountId: acc.accountId,
+    if (account && account.accessToken) {
+      logger.info(logger.fmt`Found ${providerId} connection with account ${account.id}`, {
+        accountId: account.id,
       });
       return {
         connected: true,
-        accountId: acc.accountId,
+        accountId: account.id,
       };
     }
     
@@ -69,30 +62,74 @@ export interface ProviderToolContext extends ToolContext {
   authMethod: 'oauth' | 'system';
 }
 
+// Type for auth required response
 interface AuthRequiredResponse {
   content: Array<{
-    type: string;
+    type: 'text';
     text: string;
   }>;
-  isError?: boolean;
+  isError: true;
 }
 
-/**
- * Creates a provider-specific tool with automatic authentication handling
- */
+function capitalizeProvider(provider: string): string {
+  // Special cases for provider names
+  const specialCases: Record<string, string> = {
+    'hubspot': 'HubSpot',
+    'pandadoc': 'PandaDoc',
+    'xero': 'Xero',
+    'sendgrid': 'SendGrid',
+    'anthropic': 'Anthropic',
+  };
+  
+  return specialCases[provider.toLowerCase()] || 
+    provider.charAt(0).toUpperCase() + provider.slice(1).toLowerCase();
+}
+
+function generateAuthErrorMessage(
+  provider: string, 
+  authMethod: AuthMethod, 
+  providerConfig: ProviderConfig | null
+): string {
+  const providerName = capitalizeProvider(provider);
+  
+  if (authMethod === 'system') {
+    return `${providerName} system API key not configured. Please contact your administrator to configure the system API key.`;
+  }
+  
+  if (authMethod === 'oauth') {
+    return `${providerName} authentication required. Please connect your ${providerName} account on the connections page.`;
+  }
+  
+  // For 'auto' mode, provide both options
+  const hasSystemSupport = providerConfig?.authMethods?.includes('system');
+  if (hasSystemSupport) {
+    return `${providerName} authentication not available. You can either connect your account on the connections page or contact your administrator to configure a system API key.`;
+  }
+  
+  return `${providerName} authentication required. Please connect your ${providerName} account on the connections page.`;
+}
+
 export function createProviderTool<TArgs = any>(
   server: any,
   config: ProviderToolConfig<TArgs>
 ) {
+  // Default auth method to 'auto' if not specified
   const authMethod = config.authMethod || 'auto';
-  const requiresUserAuth = config.requiresUserAuth ?? (authMethod === 'oauth');
   
+  // Create the wrapped handler
   const wrappedHandler = async (args: TArgs, context: ToolContext) => {
-    try {
+      try {
+        // Get provider configuration to check supported auth methods
         const providerConfig = getProviderConfig(config.provider);
         
-        if (!providerConfig) {
-          throw new Error(`Unknown provider: ${config.provider}`);
+        // Skip auth check if requiresUserAuth is false
+        if (config.requiresUserAuth === false) {
+          const providerContext: ProviderToolContext = {
+            ...context,
+            provider: config.provider,
+            authMethod: 'system', // Default to system for no-user-auth tools
+          };
+          return await config.handler(args, providerContext);
         }
         
         let connectionStatus: { connected: boolean; accountId?: string; authMethod?: 'oauth' | 'system' } = { connected: false };
@@ -101,7 +138,7 @@ export function createProviderTool<TArgs = any>(
         // Determine which auth method to use
         if (authMethod === 'oauth' || authMethod === 'auto') {
           // Check OAuth connection
-          const oauthStatus = await isProviderConnected(context.session.userId, config.provider);
+          const oauthStatus = await isProviderConnected(context.session.userId, config.provider, context.db);
           if (oauthStatus.connected) {
             connectionStatus = { ...oauthStatus, authMethod: 'oauth' };
             actualAuthMethod = 'oauth';
@@ -204,43 +241,4 @@ export function createProviderTool<TArgs = any>(
     config.schema,
     wrappedHandler
   );
-}
-
-function capitalizeProvider(provider: string): string {
-  const providerNames: Record<string, string> = {
-    hubspot: "HubSpot",
-    pandadoc: "PandaDoc",
-    microsoft: "Microsoft",
-    anthropic: "Anthropic",
-    sendgrid: "SendGrid",
-    slack: "Slack",
-    xero: "Xero",
-  };
-  return providerNames[provider.toLowerCase()] || provider;
-}
-
-function generateAuthErrorMessage(
-  provider: string,
-  authMethod: AuthMethod,
-  providerConfig: ProviderConfig
-): string {
-  const providerName = capitalizeProvider(provider);
-  
-  if (authMethod === 'oauth') {
-    return `${providerName} account not connected. Please visit the connections page to link your ${providerName} account.`;
-  } else if (authMethod === 'system') {
-    return `System API key for ${providerName} not configured. Please contact your administrator.`;
-  } else {
-    // Auto mode - provide more detailed message
-    const hasOAuth = providerConfig.authMethods.oauth;
-    const hasSystemKey = providerConfig.authMethods.systemApiKey;
-    
-    if (hasOAuth && !hasSystemKey) {
-      return `${providerName} account not connected. Please visit the connections page to link your ${providerName} account.`;
-    } else if (!hasOAuth && hasSystemKey) {
-      return `System API key for ${providerName} not configured. Please contact your administrator.`;
-    } else {
-      return `${providerName} authentication not available. You can either connect your account on the connections page or contact your administrator to configure a system API key.`;
-    }
-  }
 }

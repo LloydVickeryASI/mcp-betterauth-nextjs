@@ -196,6 +196,7 @@ export class SimplifiedApiClient {
           const headers = {
             ...authHeaders,
             'Content-Type': 'application/json',
+            ...(providerConfig?.headers || {}), // Include provider-specific headers
             ...options.headers,
           };
           
@@ -376,6 +377,21 @@ export class SimplifiedApiClient {
     
     if (contentType?.includes('application/json')) {
       return response.json();
+    }
+    
+    // Handle XML responses - this indicates the Accept header wasn't honored
+    if (contentType?.includes('application/xml') || contentType?.includes('text/xml')) {
+      const text = await response.text();
+      throw new ApiError(
+        ApiErrorCode.INTERNAL_ERROR,
+        'Received XML response when JSON was expected. The API may not be honoring the Accept header.',
+        {
+          provider: 'unknown',
+          operation: 'unknown',
+          originalError: new Error(`Unexpected XML response: ${text.substring(0, 200)}...`),
+          retryable: false,
+        }
+      );
     }
     
     if (contentType?.includes('text/')) {
