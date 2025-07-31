@@ -86,7 +86,20 @@ export async function middleware(request: NextRequest) {
     
     const allowedOrigins = getAllowedOrigins();
     const requestOrigin = request.headers.get('origin');
-    const allowedOriginHeader = getAllowedOriginHeader(requestOrigin, allowedOrigins);
+    
+    // For OAuth metadata endpoints, allow all origins for team flexibility
+    const isOAuthMetadataEndpoint = request.nextUrl.pathname.includes('/.well-known/') ||
+                                   request.nextUrl.pathname.includes('/mcp/register') ||
+                                   request.nextUrl.pathname.includes('/mcp/authorize') ||
+                                   request.nextUrl.pathname.includes('/mcp/token');
+    
+    let allowedOriginHeader = getAllowedOriginHeader(requestOrigin, allowedOrigins);
+    
+    // For OAuth endpoints, allow any origin since OAuth provides its own security
+    // This enables team members to use various MCP clients from different locations
+    if (isOAuthMetadataEndpoint && requestOrigin) {
+      allowedOriginHeader = requestOrigin; // Allow any origin for OAuth endpoints
+    }
     
     const response = NextResponse.next()
     
@@ -98,7 +111,7 @@ export async function middleware(request: NextRequest) {
         'Access-Control-Max-Age': '86400',
       };
       
-      // Only set origin header if the origin is allowed
+      // Set origin header if the origin is allowed
       if (allowedOriginHeader) {
         corsHeaders['Access-Control-Allow-Origin'] = allowedOriginHeader;
         corsHeaders['Access-Control-Allow-Credentials'] = 'true';
@@ -110,7 +123,7 @@ export async function middleware(request: NextRequest) {
       })
     }
     
-    // Add CORS headers to all responses only if origin is allowed
+    // Add CORS headers to all responses if origin is allowed
     if (allowedOriginHeader) {
       response.headers.set('Access-Control-Allow-Origin', allowedOriginHeader);
       response.headers.set('Access-Control-Allow-Credentials', 'true');
