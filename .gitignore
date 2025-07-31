@@ -51,3 +51,6 @@ better-auth_migrations/
 # scripts
 scripts/check-db.js
 scripts/init-db.js
+
+# generated files
+digest.txt
