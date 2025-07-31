@@ -18,10 +18,10 @@ const config = process.env.DISABLE_SENTRY_UPLOAD === 'true'
     // For all available options, see:
     // https://docs.sentry.io/platforms/javascript/guides/nextjs/manual-setup/
 
-    // Disable all source map uploads in production
-    disableServerWebpackPlugin: true,
-    disableClientWebpackPlugin: true,
-    hideSourceMaps: true,
+    // Enable source map uploads for production builds
+    disableServerWebpackPlugin: process.env.NODE_ENV !== 'production' && !process.env.CI,
+    disableClientWebpackPlugin: process.env.NODE_ENV !== 'production' && !process.env.CI,
+    hideSourceMaps: false,
 
     // Upload a larger set of source maps for prettier stack traces (increases build time)
     widenClientFileUpload: false,

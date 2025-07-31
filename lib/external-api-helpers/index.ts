@@ -28,19 +28,10 @@ export {
   type CircuitBreakerConfig,
 } from './circuit-breaker';
 
-// Caching
-export {
-  cacheManager,
-  CacheKeyBuilder,
-  type CacheConfig,
-} from './cache';
-
 // Import managers for helper functions
-import { cacheManager as cm } from './cache';
 import { circuitBreakerManager as cbm } from './circuit-breaker';
 
-// Helper to clear all caches and reset circuit breakers
+// Helper to reset circuit breakers
 export function resetAllHelpers(): void {
-  cm.clearAll();
   cbm.reset();
 }

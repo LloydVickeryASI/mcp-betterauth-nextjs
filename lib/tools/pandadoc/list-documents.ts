@@ -55,11 +55,7 @@ export async function listDocumentsHandler(
     '/documents',
     'list_documents',
     { 
-      query: params,
-      cache: {
-        enabled: true,
-        ttlMs: 300000 // 5 minute cache
-      }
+      query: params
     }
   );
   
