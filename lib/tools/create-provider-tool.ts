@@ -20,7 +20,7 @@ async function isProviderConnected(userId: string, providerId: string) {
       }
     });
     
-    logger.debug(`Checking ${providerId} connection`, {
+    logger.debug(logger.fmt`Checking ${providerId} connection for user ${userId}`, {
       totalAccounts: accounts?.length || 0,
       providers: accounts?.map(acc => acc.provider),
     });
@@ -30,7 +30,7 @@ async function isProviderConnected(userId: string, providerId: string) {
     
     if (account && account.length > 0) {
       const acc = account[0];
-      logger.info(`Found ${providerId} connection`, {
+      logger.info(logger.fmt`Found ${providerId} connection with account ${acc.accountId}`, {
         accountId: acc.accountId,
       });
       return {
@@ -39,10 +39,14 @@ async function isProviderConnected(userId: string, providerId: string) {
       };
     }
     
-    logger.debug(`No ${providerId} connection found`);
+    logger.debug(logger.fmt`No ${providerId} connection found for user ${userId}`);
     return { connected: false };
   } catch (error) {
-    logger.error(`Failed to check ${providerId} connection`, error);
+    logger.error(logger.fmt`Failed to check ${providerId} connection for user ${userId}`, {
+      error: error instanceof Error ? error.message : String(error),
+      provider: providerId,
+      userId,
+    });
     return { connected: false };
   }
 }
@@ -156,7 +160,7 @@ export function createProviderTool<TArgs = any>(
             userId: context.session?.userId,
           });
           
-          providerLogger.info(`Executing provider tool: ${config.provider}/${config.name}`);
+          providerLogger.info(providerLogger.fmt`Executing provider tool: ${config.provider}/${config.name}`);
           
           // Call the actual tool handler
           const result = await config.handler(args, providerContext);

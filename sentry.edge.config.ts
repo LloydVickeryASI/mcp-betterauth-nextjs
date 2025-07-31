@@ -40,6 +40,10 @@ Sentry.init({
   integrations: [
     // Note: httpIntegration is not available in @sentry/nextjs v9
     // It's included by default in the Next.js SDK
+    // Send console.log, console.error, and console.warn calls as logs to Sentry
+    Sentry.consoleLoggingIntegration({ 
+      levels: ["log", "error", "warn"] 
+    }),
   ],
 
   // Propagate traces to all external APIs using wildcard

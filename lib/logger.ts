@@ -1,143 +1,57 @@
 import * as Sentry from '@sentry/nextjs';
 
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+// Export Sentry's built-in logger
+export const { logger } = Sentry;
 
-export interface LogContext {
-  [key: string]: any;
-}
-
-class Logger {
-  private context: LogContext = {};
-
-  /**
-   * Set persistent context that will be included with all logs
-   */
-  setContext(context: LogContext): void {
-    this.context = { ...this.context, ...context };
-  }
-
-  /**
-   * Clear persistent context
-   */
-  clearContext(): void {
-    this.context = {};
-  }
-
-  /**
-   * Log a debug message
-   */
-  debug(message: string, extra?: LogContext): void {
-    this.log('debug', message, extra);
-  }
-
-  /**
-   * Log an info message
-   */
-  info(message: string, extra?: LogContext): void {
-    this.log('info', message, extra);
-  }
-
-  /**
-   * Log a warning
-   */
-  warn(message: string, extra?: LogContext): void {
-    this.log('warn', message, extra);
-  }
-
-  /**
-   * Log an error
-   */
-  error(message: string, error?: Error | unknown, extra?: LogContext): void {
-    const context = { ...this.context, ...extra };
+// Helper to add structured context to logs
+export function withContext<T extends Record<string, any>>(context: T) {
+  return (strings: TemplateStringsArray, ...values: any[]) => {
+    // Build the message from template
+    let message = '';
+    strings.forEach((str, i) => {
+      message += str;
+      if (i < values.length) {
+        message += String(values[i]);
+      }
+    });
     
-    // Console log in development
-    if (process.env.NODE_ENV === 'development') {
-      console.error(`[${new Date().toISOString()}] ERROR: ${message}`, error, context);
-    }
-
-    // Send to Sentry as an error
-    if (error instanceof Error) {
-      Sentry.captureException(error, {
-        level: 'error',
-        extra: {
-          message,
-          ...context,
-        },
-        tags: {
-          logger: 'true',
-        },
-      });
-    } else {
-      Sentry.captureMessage(message, {
-        level: 'error',
-        extra: {
-          error: error ? String(error) : undefined,
-          ...context,
-        },
-        tags: {
-          logger: 'true',
-        },
-      });
-    }
-
-    // Also add as breadcrumb
-    Sentry.addBreadcrumb({
-      category: 'log',
-      level: 'error',
-      message,
-      data: context,
-    });
-  }
-
-  /**
-   * Internal log method
-   */
-  private log(level: LogLevel, message: string, extra?: LogContext): void {
-    const context = { ...this.context, ...extra };
-    const timestamp = new Date().toISOString();
-
-    // Console log in development
-    if (process.env.NODE_ENV === 'development') {
-      const consoleMethod = level === 'debug' ? 'log' : level;
-      console[consoleMethod](`[${timestamp}] ${level.toUpperCase()}: ${message}`, context);
-    }
-
-    // Map log levels to Sentry severity
-    const sentryLevel = level === 'warn' ? 'warning' : level;
-
-    // Send to Sentry as a log message
-    Sentry.captureMessage(message, {
-      level: sentryLevel as Sentry.SeverityLevel,
-      extra: {
-        timestamp,
-        ...context,
-      },
-      tags: {
-        logger: 'true',
-        logLevel: level,
-      },
-    });
-
-    // Also add as breadcrumb for context
-    Sentry.addBreadcrumb({
-      category: 'log',
-      level: sentryLevel as Sentry.Breadcrumb['level'],
-      message,
-      data: context,
-      timestamp: Date.now() / 1000,
-    });
-  }
+    // Return object with message and context for use with Sentry logger
+    return { message, ...context };
+  };
 }
 
-// Create singleton logger instance
-export const logger = new Logger();
+// Create specialized loggers with preset context
+export const mcpLogger = {
+  trace: (message: string, context?: Record<string, any>) => 
+    logger.trace(message, { component: 'mcp', ...context }),
+  debug: (message: string, context?: Record<string, any>) => 
+    logger.debug(message, { component: 'mcp', ...context }),
+  info: (message: string, context?: Record<string, any>) => 
+    logger.info(message, { component: 'mcp', ...context }),
+  warn: (message: string, context?: Record<string, any>) => 
+    logger.warn(message, { component: 'mcp', ...context }),
+  error: (message: string, context?: Record<string, any>) => 
+    logger.error(message, { component: 'mcp', ...context }),
+  fatal: (message: string, context?: Record<string, any>) => 
+    logger.fatal(message, { component: 'mcp', ...context }),
+  fmt: logger.fmt,
+};
 
-// Helper function to create a child logger with specific context
-export function createLogger(context: LogContext): Logger {
-  const childLogger = new Logger();
-  childLogger.setContext(context);
-  return childLogger;
+// Helper to create a logger with specific context
+export function createLogger(baseContext: Record<string, any>) {
+  return {
+    trace: (message: string, context?: Record<string, any>) => 
+      logger.trace(message, { ...baseContext, ...context }),
+    debug: (message: string, context?: Record<string, any>) => 
+      logger.debug(message, { ...baseContext, ...context }),
+    info: (message: string, context?: Record<string, any>) => 
+      logger.info(message, { ...baseContext, ...context }),
+    warn: (message: string, context?: Record<string, any>) => 
+      logger.warn(message, { ...baseContext, ...context }),
+    error: (message: string, context?: Record<string, any>) => 
+      logger.error(message, { ...baseContext, ...context }),
+    fatal: (message: string, context?: Record<string, any>) => 
+      logger.fatal(message, { ...baseContext, ...context }),
+    fmt: logger.fmt,
+  };
 }
-
-// MCP-specific logger
-export const mcpLogger = createLogger({ component: 'mcp' });

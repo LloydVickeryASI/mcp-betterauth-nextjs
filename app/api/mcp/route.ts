@@ -22,7 +22,7 @@ if (!hasLoggedApiKeyStatus && process.env.NODE_ENV === 'development') {
 
 const mcpHandlerFunction = async (req: Request, session: any) => {
     // The session from withMcpAuth contains the MCP access token session
-    mcpLogger.info("MCP Request received", {
+    mcpLogger.info(mcpLogger.fmt`MCP Request received from user ${session?.userId}`, {
         userId: session?.userId,
         clientId: session?.clientId,
         method: req.method,

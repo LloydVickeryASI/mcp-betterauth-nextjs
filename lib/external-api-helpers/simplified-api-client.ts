@@ -170,19 +170,22 @@ export class SimplifiedApiClient {
                     const refreshData = await refreshResponse.json();
                     accessToken = refreshData.accessToken;
                     const logger = createLogger({ component: 'api.auth', provider, userId });
-                    logger.info('Refreshed expired token', { provider });
+                    logger.info(logger.fmt`Refreshed expired token for provider ${provider}`);
                   } else {
                     const logger = createLogger({ component: 'api.auth', provider, userId });
-                    logger.warn('Failed to refresh token, using potentially expired token', { provider });
+                    logger.warn(logger.fmt`Failed to refresh token for ${provider}, using potentially expired token`);
                   }
                 } catch (refreshError) {
                   const logger = createLogger({ component: 'api.auth', provider, userId });
-                  logger.error('Error refreshing token', refreshError, { provider });
+                  logger.error(logger.fmt`Error refreshing token for provider ${provider}`, { 
+                    error: refreshError instanceof Error ? refreshError.message : String(refreshError),
+                    provider 
+                  });
                   // Continue with the expired token - let the API call fail naturally
                 }
               } else {
                 const logger = createLogger({ component: 'api.auth', provider, userId });
-                logger.warn('Token expired but no refresh token available', { provider });
+                logger.warn(logger.fmt`Token expired for ${provider} but no refresh token available`);
               }
             }
             

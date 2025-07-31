@@ -96,15 +96,16 @@ export function registerTool(
               });
               
               // Log tool execution
-              toolLogger.info(`Executing MCP tool: ${name}`, extractMcpParameters(args));
+              toolLogger.info(toolLogger.fmt`Executing MCP tool: ${name}`, extractMcpParameters(args));
 
               try {
                 const startTime = Date.now();
                 const result = await handler(args, context);
                 
                 // Log successful completion
-                toolLogger.info(`MCP tool completed: ${name}`, {
-                  duration_ms: Date.now() - startTime,
+                const duration = Date.now() - startTime;
+                toolLogger.info(toolLogger.fmt`MCP tool completed: ${name} in ${duration}ms`, {
+                  duration_ms: duration,
                   success: true,
                 });
                 
@@ -113,7 +114,8 @@ export function registerTool(
                 const errorMessage = handleMcpError(err);
                 
                 // Log error
-                toolLogger.error(`MCP tool failed: ${name}`, err, {
+                toolLogger.error(toolLogger.fmt`MCP tool failed: ${name} - ${errorMessage}`, {
+                  error: err instanceof Error ? err.message : String(err),
                   errorMessage,
                   toolArgs: args,
                 });
