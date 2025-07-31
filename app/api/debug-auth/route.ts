@@ -3,6 +3,11 @@ import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 
 export async function GET() {
+  // Only allow debug endpoints in development
+  if (process.env.NODE_ENV !== 'development') {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   try {
     // Get the session using Better Auth
     const session = await auth.api.getSession({ headers: await headers() });

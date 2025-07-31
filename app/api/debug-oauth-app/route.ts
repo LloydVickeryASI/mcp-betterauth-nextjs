@@ -2,6 +2,11 @@ import { Pool } from "@neondatabase/serverless";
 import { NextRequest } from "next/server";
 
 export async function GET(request: NextRequest) {
+  // Only allow debug endpoints in development
+  if (process.env.NODE_ENV !== 'development') {
+    return Response.json({ error: "Not found" }, { status: 404 });
+  }
+
   const clientId = request.nextUrl.searchParams.get("client_id");
   
   if (!clientId) {
