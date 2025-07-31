@@ -101,7 +101,7 @@ function generateAuthErrorMessage(
   }
   
   // For 'auto' mode, provide both options
-  const hasSystemSupport = providerConfig?.authMethods?.includes('system');
+  const hasSystemSupport = !!providerConfig?.authMethods?.systemApiKey;
   if (hasSystemSupport) {
     return `${providerName} authentication not available. You can either connect your account on the connections page or contact your administrator to configure a system API key.`;
   }
