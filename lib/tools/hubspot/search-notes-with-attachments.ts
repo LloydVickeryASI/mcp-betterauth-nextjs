@@ -85,62 +85,25 @@ export function createSearchNotesWithAttachmentsTool(server: any) {
           if (note.properties.hs_attachment_ids) {
             const attachmentIds = note.properties.hs_attachment_ids.split(';').filter(Boolean);
             
-            for (const attachmentId of attachmentIds) {
-              try {
-                // Get file metadata
-                const fileInfoResponse = await api.get(`/files/v3/files/${attachmentId}`, 'get_file_info');
-                const fileInfo = fileInfoResponse.data;
-                
-                const attachmentData: any = {
-                  id: fileInfo.id,
-                  name: fileInfo.name,
-                  extension: fileInfo.extension,
-                  size: fileInfo.size,
-                  type: fileInfo.type
-                };
-
-                // If it's a spreadsheet file, parse its contents
-                if (fileInfo.extension && ['xlsx', 'xls', 'csv'].includes(fileInfo.extension.toLowerCase())) {
-                  try {
-                    // Get signed download URL
-                    const signedUrlResponseData = await api.get(`/files/v3/files/${attachmentId}/signed-url`, 'get_signed_url');
-                    const signedUrlResponse = signedUrlResponseData.data;
-                    
-                    // Download file
-                    const downloadResponse = await fetch(signedUrlResponse.url);
-                    if (!downloadResponse.ok) {
-                      throw new Error(`Failed to download: ${downloadResponse.status}`);
-                    }
-
-                    const arrayBuffer = await downloadResponse.arrayBuffer();
-                    
-                    // Parse based on file type
-                    let parsedData: any;
-                    if (fileInfo.extension.toLowerCase() === 'csv') {
-                      // For CSV, convert to text first
-                      const text = new TextDecoder().decode(arrayBuffer);
-                      const workbook = XLSX.read(text, { type: 'string' });
-                      parsedData = parseWorkbook(workbook, maxRowsPerFile);
-                    } else {
-                      // For Excel files
-                      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-                      parsedData = parseWorkbook(workbook, maxRowsPerFile);
-                    }
-                    
-                    attachmentData.content = parsedData;
-                  } catch (parseError: any) {
-                    attachmentData.parseError = `Failed to parse file: ${parseError.message}`;
-                  }
-                }
-
-                noteData.attachments.push(attachmentData);
-              } catch (attachmentError: any) {
+            // Process attachments concurrently with a limit to avoid overwhelming the API
+            const ATTACHMENT_CONCURRENCY_LIMIT = 3;
+            const attachmentPromises = attachmentIds.map((attachmentId: string, index: number) => 
+              processAttachment(attachmentId, api, maxRowsPerFile, index, ATTACHMENT_CONCURRENCY_LIMIT)
+            );
+            
+            const attachmentResults = await Promise.allSettled(attachmentPromises);
+            
+            // Process results and maintain order
+            attachmentResults.forEach((result, index) => {
+              if (result.status === 'fulfilled') {
+                noteData.attachments.push(result.value);
+              } else {
                 noteData.attachments.push({
-                  id: attachmentId,
-                  error: `Failed to process attachment: ${attachmentError.message}`
+                  id: attachmentIds[index],
+                  error: `Failed to process attachment: ${result.reason?.message || 'Unknown error'}`
                 });
               }
-            }
+            });
           }
 
           return noteData;
@@ -164,6 +127,73 @@ export function createSearchNotesWithAttachmentsTool(server: any) {
       }
     }
   });
+}
+
+// Helper function to process a single attachment with rate limiting
+async function processAttachment(
+  attachmentId: string, 
+  api: ProviderApiHelper, 
+  maxRowsPerFile: number,
+  index: number,
+  concurrencyLimit: number
+): Promise<any> {
+  // Add a small delay based on index to avoid hitting rate limits
+  const delay = Math.floor(index / concurrencyLimit) * 100;
+  if (delay > 0) {
+    await new Promise(resolve => setTimeout(resolve, delay));
+  }
+  
+  try {
+    // Get file metadata
+    const fileInfoResponse = await api.get(`/files/v3/files/${attachmentId}`, 'get_file_info');
+    const fileInfo = fileInfoResponse.data;
+    
+    const attachmentData: any = {
+      id: fileInfo.id,
+      name: fileInfo.name,
+      extension: fileInfo.extension,
+      size: fileInfo.size,
+      type: fileInfo.type
+    };
+
+    // If it's a spreadsheet file, parse its contents
+    if (fileInfo.extension && ['xlsx', 'xls', 'csv'].includes(fileInfo.extension.toLowerCase())) {
+      try {
+        // Get signed download URL
+        const signedUrlResponseData = await api.get(`/files/v3/files/${attachmentId}/signed-url`, 'get_signed_url');
+        const signedUrlResponse = signedUrlResponseData.data;
+        
+        // Download file
+        const downloadResponse = await fetch(signedUrlResponse.url);
+        if (!downloadResponse.ok) {
+          throw new Error(`Failed to download: ${downloadResponse.status}`);
+        }
+
+        const arrayBuffer = await downloadResponse.arrayBuffer();
+        
+        // Parse based on file type
+        let parsedData: any;
+        if (fileInfo.extension.toLowerCase() === 'csv') {
+          // For CSV, convert to text first
+          const text = new TextDecoder().decode(arrayBuffer);
+          const workbook = XLSX.read(text, { type: 'string' });
+          parsedData = parseWorkbook(workbook, maxRowsPerFile);
+        } else {
+          // For Excel files
+          const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+          parsedData = parseWorkbook(workbook, maxRowsPerFile);
+        }
+        
+        attachmentData.content = parsedData;
+      } catch (parseError: any) {
+        attachmentData.parseError = `Failed to parse file: ${parseError.message}`;
+      }
+    }
+
+    return attachmentData;
+  } catch (attachmentError: any) {
+    throw attachmentError;
+  }
 }
 
 // Helper function to clean HTML content
