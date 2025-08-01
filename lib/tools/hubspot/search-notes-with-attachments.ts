@@ -211,59 +211,35 @@ function parseWorkbook(workbook: XLSX.WorkBook, maxRows: number): any {
   for (const sheetName of workbook.SheetNames) {
     const worksheet = workbook.Sheets[sheetName];
     
-    // Convert to JSON
-    const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
-      header: 1,
-      defval: null,
-      blankrows: false 
-    }) as any[][];
-
-    if (jsonData.length === 0) {
-      result.sheets[sheetName] = { empty: true };
-      continue;
+    // Get the range of the worksheet
+    const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+    
+    // Convert to array of arrays with all cells
+    const rows: any[][] = [];
+    for (let rowNum = range.s.r; rowNum <= range.e.r && rows.length < maxRows; rowNum++) {
+      const row: any[] = [];
+      for (let colNum = range.s.c; colNum <= range.e.c; colNum++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: rowNum, c: colNum });
+        const cell = worksheet[cellAddress];
+        row.push(cell ? cell.v : null);
+      }
+      rows.push(row);
     }
 
-    // Try to detect if first row is headers
-    const firstRow = jsonData[0];
-    const hasHeaders = firstRow.some(cell => 
-      cell && typeof cell === 'string' && isNaN(Number(cell))
-    );
-
-    if (hasHeaders && jsonData.length > 1) {
-      // Standard format with headers
-      const headers = firstRow;
-      const rows = jsonData.slice(1, maxRows + 1);
-      
-      result.sheets[sheetName] = {
-        headers,
-        rowCount: Math.min(rows.length, maxRows),
-        totalRows: jsonData.length - 1,
-        data: rows.map((row, index) => {
-          const rowObj: any = { _row: index + 2 };
-          headers.forEach((header, colIndex) => {
-            if (header) {
-              rowObj[header] = row[colIndex] ?? null;
-            }
-          });
-          return rowObj;
-        })
-      };
-    } else {
-      // No clear headers, return as array
-      result.sheets[sheetName] = {
-        rowCount: Math.min(jsonData.length, maxRows),
-        totalRows: jsonData.length,
-        data: jsonData.slice(0, maxRows).map((row, index) => ({
-          _row: index + 1,
-          values: row
-        }))
-      };
-    }
+    result.sheets[sheetName] = {
+      rowCount: rows.length,
+      totalRows: range.e.r - range.s.r + 1,
+      columnCount: range.e.c - range.s.c + 1,
+      rows: rows.map((row, index) => ({
+        rowNumber: index + 1,
+        cells: row
+      }))
+    };
 
     // Add truncation note if needed
-    if (jsonData.length > maxRows + (hasHeaders ? 1 : 0)) {
+    if (range.e.r - range.s.r + 1 > maxRows) {
       result.sheets[sheetName].truncated = true;
-      result.sheets[sheetName].truncationNote = `Showing first ${maxRows} rows of ${jsonData.length - (hasHeaders ? 1 : 0)} total rows`;
+      result.sheets[sheetName].truncationNote = `Showing first ${maxRows} rows of ${range.e.r - range.s.r + 1} total rows`;
     }
   }
 
