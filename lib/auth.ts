@@ -13,8 +13,19 @@ export const auth = betterAuth({
     connectionTimeoutMillis: 2000, // Return an error after 2 seconds if connection cannot be established
   }),
   baseURL: getBaseUrl(),
+  trustHost: true, // Required for Vercel deployment (behind reverse proxy)
   emailAndPassword: {
     enabled: true
+  },
+  // Force secure cookies in production for proper OAuth state handling
+  advanced: {
+    useSecureCookies: process.env.NODE_ENV === 'production',
+    defaultCookieAttributes: {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax' as const,
+      path: '/'
+    }
   },
   socialProviders: {
     microsoft: {
@@ -28,9 +39,6 @@ export const auth = betterAuth({
         ? `${process.env.AUTH_HUB_URL}/api/auth/callback/microsoft`
         : undefined,
       mapProfileToUser: async (profile) => {
-        // Debug logging to see what Microsoft returns
-        console.log("Microsoft profile data:", profile);
-        
         return {
           email: profile.email || profile.mail || profile.userPrincipalName || profile.upn || profile.preferred_username || "",
           name: profile.name || profile.displayName || `${profile.given_name || ""} ${profile.family_name || ""}`.trim() || "",
