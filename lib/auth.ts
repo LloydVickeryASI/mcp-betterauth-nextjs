@@ -13,8 +13,19 @@ export const auth = betterAuth({
     connectionTimeoutMillis: 2000, // Return an error after 2 seconds if connection cannot be established
   }),
   baseURL: getBaseUrl(),
+  trustHost: true, // Required for Vercel deployment (behind reverse proxy)
   emailAndPassword: {
     enabled: true
+  },
+  // Force secure cookies in production for proper OAuth state handling
+  advanced: {
+    useSecureCookies: process.env.NODE_ENV === 'production',
+    defaultCookieAttributes: {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax' as const,
+      path: '/'
+    }
   },
   socialProviders: {
     microsoft: {
