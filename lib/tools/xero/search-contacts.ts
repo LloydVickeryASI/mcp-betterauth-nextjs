@@ -53,8 +53,9 @@ export async function searchContactsHandler(
   
   // Add where clause if query is provided
   if (query.trim()) {
-    // The API helper will handle URL encoding, so we don't need to escape quotes
-    const searchQuery = query.trim();
+    // Escape the query to prevent injection attacks
+    // Double quotes need to be escaped as \" for Xero's where clause
+    const searchQuery = query.trim().replace(/"/g, '\\"');
     // Xero requires null guards for optional fields
     queryParams.where = `(Name != null AND Name.Contains("${searchQuery}")) OR (EmailAddress != null AND EmailAddress.Contains("${searchQuery}"))`;
   }
@@ -68,11 +69,6 @@ export async function searchContactsHandler(
       headers: {
         'Xero-Tenant-Id': tenantId
       },
-      cache: {
-        enabled: true,
-        ttlMs: 60000, // Cache for 1 minute
-        key: `contacts:search:${query.trim().toLowerCase()}`
-      }
     }
   );
   
@@ -97,7 +93,6 @@ export async function searchContactsHandler(
           contactStatus: contact.ContactStatus
         })),
         total: contacts.length,
-        cached: response.cached || false
       }, null, 2)
     }],
   };

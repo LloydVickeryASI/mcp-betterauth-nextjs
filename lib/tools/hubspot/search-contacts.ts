@@ -43,13 +43,6 @@ export async function searchContactsHandler(
       }],
       properties: ["firstname", "lastname", "email", "phone", "company"],
       limit: 10
-    },
-    {
-      cache: {
-        enabled: true,
-        ttlMs: 60000, // Cache for 1 minute
-        key: `contacts:search:${query.trim().toLowerCase()}`
-      }
     }
   );
   
@@ -59,8 +52,7 @@ export async function searchContactsHandler(
       text: JSON.stringify({
         authenticated: true,
         results: response.data.results,
-        total: response.data.total,
-        cached: response.cached || false
+        total: response.data.total
       }, null, 2)
     }],
   };

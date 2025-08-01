@@ -5,7 +5,6 @@ import { withRetry, providerRetryConfigs } from './retry';
 import { ApiError, mapProviderError, providerErrorMappers, ApiErrorCode } from './errors';
 import { apiLogger } from './logging';
 import { circuitBreakerManager, providerCircuitConfigs } from './circuit-breaker';
-import { cacheManager, CacheKeyBuilder } from './cache';
 import { getProviderConfig, formatApiKeyHeader, getSystemApiKey } from '@/lib/providers/config';
 import { getAccountById, getAccountByUserIdAndProvider } from '@/lib/db-queries';
 import { Pool } from '@neondatabase/serverless';
@@ -30,11 +29,6 @@ export interface ApiRequestOptions {
   headers?: Record<string, string>;
   body?: any;
   query?: Record<string, string | number | boolean>;
-  cache?: {
-    enabled: boolean;
-    ttlMs?: number;
-    key?: string;
-  };
   skipRateLimit?: boolean;
   skipRetry?: boolean;
   skipCircuitBreaker?: boolean;
@@ -46,7 +40,6 @@ export interface ApiResponse<T = any> {
   data: T;
   status: number;
   headers: Record<string, string>;
-  cached?: boolean;
 }
 
 export class SimplifiedApiClient {
@@ -86,23 +79,6 @@ export class SimplifiedApiClient {
     }
     
     const url = `${baseUrl}${version ? `/${version}` : ''}${path}`;
-    
-    // Check cache for GET requests
-    const cacheKey = options.cache?.enabled && options.method === 'GET'
-      ? CacheKeyBuilder.build({
-          provider,
-          operation,
-          ...options.query,
-          customKey: options.cache.key
-        })
-      : null;
-    
-    if (cacheKey) {
-      const cached = cacheManager.getCache(provider).get(cacheKey) as ApiResponse<T> | undefined;
-      if (cached) {
-        return { ...cached, cached: true };
-      }
-    }
     
     // Apply rate limiting
     if (!options.skipRateLimit) {
@@ -267,16 +243,6 @@ export class SimplifiedApiClient {
               status: response.status,
               headers: Object.fromEntries(response.headers.entries()),
             };
-            
-            // Cache successful GET responses
-            if (cacheKey && options.cache?.enabled) {
-              cacheManager.getCache(provider).set(
-                cacheKey,
-                result,
-                options.cache.ttlMs
-              );
-            }
-            
             return result;
           } catch (error) {
             // Log error
