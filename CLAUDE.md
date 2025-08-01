@@ -280,6 +280,49 @@ For testing the MCP server without bearer token authentication, you can enable n
 - Sentry error tracking is integrated into all MCP tools automatically
 - Tool schemas must be plain objects with Zod validators, not Zod objects (e.g., `{ message: z.string() }` not `z.object({ message: z.string() })`)
 
+## Vercel Deployment Troubleshooting
+
+### "State Mismatch. Verification not found" Error
+
+If you encounter this error on Vercel but not locally, follow these steps:
+
+1. **Set the `AUTH_URL` environment variable on Vercel**
+   - Go to your Vercel project settings → Environment Variables
+   - Add `AUTH_URL` with your production URL (e.g., `https://mcp-betterauth-nextjs.vercel.app`)
+   - This is CRITICAL for OAuth state matching to work properly
+
+2. **Ensure auth routes use Node.js runtime**
+   - The auth route already includes `export const runtime = "nodejs"`
+   - This prevents Edge runtime issues with database connections
+
+3. **Verify Microsoft redirect URIs in Azure**
+   - Go to Azure Portal → App registrations → Your app → Authentication
+   - Add your production redirect URI: `https://your-domain.vercel.app/api/auth/callback/microsoft`
+   - Remove any localhost URIs for production apps
+
+4. **Check your database**
+   ```sql
+   -- Run this while attempting sign-in to verify verification table is working
+   SELECT * FROM verification ORDER BY "createdAt" DESC LIMIT 5;
+   ```
+   - You should see a new row created when starting OAuth flow
+   - The row should be deleted after successful callback
+
+5. **Required Vercel environment variables:**
+   - `BETTER_AUTH_SECRET` - Your auth secret
+   - `DATABASE_URL` - PostgreSQL connection string
+   - `AUTH_URL` - Your production URL (most common missing variable)
+   - `MICROSOFT_CLIENT_ID` - From Azure app registration
+   - `MICROSOFT_CLIENT_SECRET` - From Azure app registration
+   - `MICROSOFT_TENANT_ID` - Usually "common"
+
+### Common Vercel Issues
+
+- **OAuth metadata discovery fails**: Set `AUTH_URL` environment variable
+- **State mismatch errors**: Ensure `AUTH_URL` matches your actual deployment URL
+- **Database connection issues**: Auth routes must use Node.js runtime (already configured)
+- **Preview deployments**: Each preview gets a unique URL; consider using OAuth proxy plugin
+
 ## Testing Patterns
 
 ### Live Testing with MCP Inspector
@@ -351,3 +394,14 @@ curl -X POST "https://api.hubapi.com/crm/v3/objects/contacts/search" \
 ```
 
 Note: If the token has expired, you'll need to refresh it through the `/connections` page or use the refresh token if available.
+
+## Vercel Deployment Checklist
+
+Before deploying to Vercel:
+
+1. **Copy `.env.example` to `.env.local`** and fill in all required values
+2. **Set all environment variables in Vercel project settings**
+3. **Most important**: Set `AUTH_URL` to your production URL
+4. **Update redirect URIs** in all OAuth providers (Microsoft, HubSpot, etc.)
+5. **Run database migrations** if not using automatic migrations
+6. **Test OAuth flow** after deployment using MCP Inspector

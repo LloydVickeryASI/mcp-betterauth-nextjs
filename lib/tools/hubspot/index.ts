@@ -1,5 +1,6 @@
 import { createProviderTool } from "../create-provider-tool";
 import { searchContactsHandler, searchContactsSchema } from "./search-contacts";
+import { createSearchNotesWithAttachmentsTool } from "./search-notes-with-attachments";
 
 export function registerHubSpotTools(server: any) {
   // Search contacts tool
@@ -10,6 +11,9 @@ export function registerHubSpotTools(server: any) {
     schema: searchContactsSchema,
     handler: searchContactsHandler
   });
+  
+  // Search notes with attachments tool
+  createSearchNotesWithAttachmentsTool(server);
   
   // Add more HubSpot tools here as needed
 }
