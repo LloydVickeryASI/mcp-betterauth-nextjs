@@ -60,7 +60,7 @@ export const auth = betterAuth({
           authorizationUrl: "https://app.hubspot.com/oauth/authorize",
           tokenUrl: "https://api.hubapi.com/oauth/v1/token",
           userInfoUrl: "https://api.hubapi.com/oauth/v1/access-tokens",
-          scopes: ["crm.objects.contacts.read"],
+          scopes: ["crm.objects.contacts.read", "files", "files.ui_hidden.read"],
           accessType: "offline",
           authentication: "post" as const,
           getUserInfo: async (tokens) => {
