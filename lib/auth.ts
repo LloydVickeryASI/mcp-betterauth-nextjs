@@ -28,9 +28,6 @@ export const auth = betterAuth({
         ? `${process.env.AUTH_HUB_URL}/api/auth/callback/microsoft`
         : undefined,
       mapProfileToUser: async (profile) => {
-        // Debug logging to see what Microsoft returns
-        console.log("Microsoft profile data:", profile);
-        
         return {
           email: profile.email || profile.mail || profile.userPrincipalName || profile.upn || profile.preferred_username || "",
           name: profile.name || profile.displayName || `${profile.given_name || ""} ${profile.family_name || ""}`.trim() || "",
