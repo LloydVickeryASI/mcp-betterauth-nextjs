@@ -62,43 +62,47 @@ export async function middleware(request: NextRequest) {
     // Debug logging
     console.log(`[Middleware] ${request.method} ${request.nextUrl.pathname}${request.nextUrl.search}`)
     
-    // Special logging for token exchange
+    // Special logging for token exchange (sanitized for security)
     if (request.nextUrl.pathname === '/api/auth/mcp/token' && request.method === 'POST') {
-      const clonedRequest = request.clone();
-      try {
-        const contentType = request.headers.get('content-type');
-        let body;
-        
-        if (contentType?.includes('application/x-www-form-urlencoded')) {
-          const text = await clonedRequest.text();
-          body = Object.fromEntries(new URLSearchParams(text));
-        } else if (contentType?.includes('application/json')) {
-          body = await clonedRequest.json();
-        } else {
-          body = await clonedRequest.text();
-        }
-        
-        console.log('[Token Exchange Body]:', body);
-      } catch (error) {
-        console.log('[Token Exchange] Error reading body:', error);
-      }
+      // Only log that a token exchange is happening, not the sensitive data
+      console.log('[Token Exchange] Request received');
     }
     
     const allowedOrigins = getAllowedOrigins();
     const requestOrigin = request.headers.get('origin');
     
-    // For OAuth metadata endpoints, allow all origins for team flexibility
-    const isOAuthMetadataEndpoint = request.nextUrl.pathname.includes('/.well-known/') ||
-                                   request.nextUrl.pathname.includes('/mcp/register') ||
-                                   request.nextUrl.pathname.includes('/mcp/authorize') ||
-                                   request.nextUrl.pathname.includes('/mcp/token');
+    // For OAuth metadata discovery endpoints only, we need to be more permissive
+    // These are read-only endpoints that don't expose sensitive data
+    const isOAuthDiscoveryEndpoint = request.nextUrl.pathname.includes('/.well-known/');
+    
+    // OAuth action endpoints require proper CORS validation
+    const isOAuthActionEndpoint = request.nextUrl.pathname.includes('/mcp/register') ||
+                                 request.nextUrl.pathname.includes('/mcp/authorize') ||
+                                 request.nextUrl.pathname.includes('/mcp/token');
     
     let allowedOriginHeader = getAllowedOriginHeader(requestOrigin, allowedOrigins);
     
-    // For OAuth endpoints, allow any origin since OAuth provides its own security
-    // This enables team members to use various MCP clients from different locations
-    if (isOAuthMetadataEndpoint && requestOrigin) {
-      allowedOriginHeader = requestOrigin; // Allow any origin for OAuth endpoints
+    // For OAuth discovery endpoints, allow any origin (read-only, no sensitive data)
+    // For OAuth action endpoints, enforce CORS properly
+    if (isOAuthDiscoveryEndpoint && requestOrigin) {
+      allowedOriginHeader = requestOrigin; // Allow any origin for discovery
+    } else if (isOAuthActionEndpoint && !allowedOriginHeader) {
+      // In development, be more permissive for local testing
+      // Allow requests without origin header (direct browser access, some tools)
+      if (process.env.NODE_ENV === 'development' && !requestOrigin) {
+        console.log('[CORS] Development mode: Allowing request without origin header');
+        // Continue without blocking
+      } else {
+        // For OAuth action endpoints, if origin not allowed, return early with error
+        console.warn(`[CORS] Blocked OAuth action from origin: ${requestOrigin}`);
+        return new NextResponse(
+          JSON.stringify({ error: 'CORS: Origin not allowed' }),
+          { 
+            status: 403,
+            headers: { 'Content-Type': 'application/json' }
+          }
+        );
+      }
     }
     
     const response = NextResponse.next()

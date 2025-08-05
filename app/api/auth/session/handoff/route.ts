@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { getAuthCookieOptions, AUTH_COOKIE_NAMES } from "@/lib/cookie-config";
 
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get("token");
@@ -25,14 +26,12 @@ export async function GET(request: NextRequest) {
     // Create response with redirect
     const response = NextResponse.redirect(new URL(next, request.url));
 
-    // Set the session cookie for this domain
-    response.cookies.set("better-auth.session_token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7, // 7 days
-    });
+    // Set the session cookie for this domain using standardized config
+    response.cookies.set(
+      AUTH_COOKIE_NAMES.SESSION_TOKEN, 
+      token, 
+      getAuthCookieOptions()
+    );
 
     return response;
   } catch (error) {

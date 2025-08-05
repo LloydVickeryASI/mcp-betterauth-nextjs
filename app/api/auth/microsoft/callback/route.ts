@@ -33,9 +33,16 @@ export async function GET(request: NextRequest) {
   // Now handle the state-based redirect back to preview
   if (stateParam) {
     try {
+      // Ensure STATE_SECRET is configured when using OAuth hub
+      const stateSecret = process.env.STATE_SECRET;
+      if (!stateSecret) {
+        console.error("STATE_SECRET environment variable is not configured");
+        throw new Error("OAuth state verification is not properly configured");
+      }
+
       const decoded = jwt.verify(
         stateParam,
-        process.env.STATE_SECRET || "dev-secret-please-change"
+        stateSecret
       ) as { origin: string; next?: string; timestamp: number };
 
       // Validate the timestamp (prevent replay attacks)
