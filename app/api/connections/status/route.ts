@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { getAccountsByUserId } from "@/lib/db-queries";
 import { Pool } from "@neondatabase/serverless";
+import { OAUTH_SCOPES } from "@/lib/oauth-scopes";
 
 export async function GET(req: Request) {
   try {
@@ -26,14 +27,14 @@ export async function GET(req: Request) {
         connected: false,
         email: '',
         connectedAt: '',
-        scopes: ['crm.objects.contacts.read']
+        scopes: [...OAUTH_SCOPES.hubspot]
       },
       {
         provider: 'pandadoc',
         connected: false,
         email: '',
         connectedAt: '',
-        scopes: ['read+write']
+        scopes: [...OAUTH_SCOPES.pandadoc]
       },
       {
         provider: 'xero',
@@ -41,7 +42,7 @@ export async function GET(req: Request) {
         email: '',
         name: '',
         connectedAt: '',
-        scopes: ['accounting.contacts.read', 'offline_access']
+        scopes: [...OAUTH_SCOPES.xero]
       }
     ];
 

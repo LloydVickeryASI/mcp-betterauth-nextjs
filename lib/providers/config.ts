@@ -1,3 +1,5 @@
+import { OAUTH_SCOPES } from '../oauth-scopes';
+
 export interface OAuthConfig {
   clientId?: string;
   clientSecret?: string;
@@ -39,7 +41,7 @@ export const providers: Record<string, ProviderConfig> = {
   hubspot: {
     authMethods: {
       oauth: {
-        scopes: ["crm.objects.contacts.read", "crm.objects.contacts.write"]
+        scopes: [...OAUTH_SCOPES.hubspot]
       },
       systemApiKey: {
         envVar: "HUBSPOT_API_KEY",
@@ -52,7 +54,7 @@ export const providers: Record<string, ProviderConfig> = {
   pandadoc: {
     authMethods: {
       oauth: {
-        scopes: ["read+write"]
+        scopes: [...OAUTH_SCOPES.pandadoc]
       },
       systemApiKey: {
         envVar: "PANDADOC_API_KEY",
@@ -75,7 +77,7 @@ export const providers: Record<string, ProviderConfig> = {
   slack: {
     authMethods: {
       oauth: {
-        scopes: ["channels:read", "chat:write", "users:read"]
+        scopes: [...OAUTH_SCOPES.slack]
       },
       systemApiKey: {
         envVar: "SLACK_API_KEY",
@@ -88,7 +90,7 @@ export const providers: Record<string, ProviderConfig> = {
   xero: {
     authMethods: {
       oauth: {
-        scopes: ["accounting.contacts.read", "accounting.transactions", "offline_access"]
+        scopes: [...OAUTH_SCOPES.xero]
       },
       systemApiKey: {
         envVar: "XERO_API_KEY",

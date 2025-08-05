@@ -4,6 +4,7 @@ import { genericOAuth } from "better-auth/plugins";
 import { nextCookies } from "better-auth/next-js";
 import { Pool } from "@neondatabase/serverless";
 import { getBaseUrl } from "./get-base-url";
+import { OAUTH_SCOPES } from "./oauth-scopes";
 
 export const auth = betterAuth({
   database: new Pool({
@@ -40,7 +41,7 @@ export const auth = betterAuth({
       clientSecret: process.env.MICROSOFT_CLIENT_SECRET!,
       tenantId: process.env.MICROSOFT_TENANT_ID ?? "common",
       prompt: "select_account",
-      scopes: ["openid", "profile", "email", "User.Read"],
+      scopes: [...OAUTH_SCOPES.microsoft],
       // Use static redirect URI for OAuth hub pattern
       redirectURI: process.env.AUTH_HUB_URL 
         ? `${process.env.AUTH_HUB_URL}/api/auth/callback/microsoft`
@@ -67,7 +68,7 @@ export const auth = betterAuth({
           authorizationUrl: "https://app.hubspot.com/oauth/authorize",
           tokenUrl: "https://api.hubapi.com/oauth/v1/token",
           userInfoUrl: "https://api.hubapi.com/oauth/v1/access-tokens",
-          scopes: ["crm.objects.contacts.read", "files", "files.ui_hidden.read"],
+          scopes: [...OAUTH_SCOPES.hubspot],
           accessType: "offline",
           authentication: "post" as const,
           getUserInfo: async (tokens) => {
@@ -108,7 +109,7 @@ export const auth = betterAuth({
           clientSecret: process.env.PANDADOC_CLIENT_SECRET!,
           authorizationUrl: "https://app.pandadoc.com/oauth2/authorize",
           tokenUrl: "https://api.pandadoc.com/oauth2/access_token",
-          scopes: ["read+write"],
+          scopes: [...OAUTH_SCOPES.pandadoc],
           accessType: "offline",
           authentication: "post" as const,
           getUserInfo: async (tokens) => {
@@ -142,7 +143,7 @@ export const auth = betterAuth({
           clientSecret: process.env.XERO_CLIENT_SECRET!,
           authorizationUrl: "https://login.xero.com/identity/connect/authorize?prompt=select_account",
           tokenUrl: "https://identity.xero.com/connect/token",
-          scopes: ["openid", "profile", "email", "accounting.contacts.read", "accounting.transactions", "offline_access"],
+          scopes: [...OAUTH_SCOPES.xero],
           accessType: "offline",
           authentication: "basic" as const,
           getUserInfo: async (tokens) => {
