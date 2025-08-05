@@ -103,15 +103,22 @@ export async function middleware(request: NextRequest) {
     if (isOAuthDiscoveryEndpoint && requestOrigin) {
       allowedOriginHeader = requestOrigin; // Allow any origin for discovery
     } else if (isOAuthActionEndpoint && !allowedOriginHeader) {
-      // For OAuth action endpoints, if origin not allowed, return early with error
-      console.warn(`[CORS] Blocked OAuth action from origin: ${requestOrigin}`);
-      return new NextResponse(
-        JSON.stringify({ error: 'CORS: Origin not allowed' }),
-        { 
-          status: 403,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
+      // In development, be more permissive for local testing
+      // Allow requests without origin header (direct browser access, some tools)
+      if (process.env.NODE_ENV === 'development' && !requestOrigin) {
+        console.log('[CORS] Development mode: Allowing request without origin header');
+        // Continue without blocking
+      } else {
+        // For OAuth action endpoints, if origin not allowed, return early with error
+        console.warn(`[CORS] Blocked OAuth action from origin: ${requestOrigin}`);
+        return new NextResponse(
+          JSON.stringify({ error: 'CORS: Origin not allowed' }),
+          { 
+            status: 403,
+            headers: { 'Content-Type': 'application/json' }
+          }
+        );
+      }
     }
     
     const response = NextResponse.next()
