@@ -62,26 +62,10 @@ export async function middleware(request: NextRequest) {
     // Debug logging
     console.log(`[Middleware] ${request.method} ${request.nextUrl.pathname}${request.nextUrl.search}`)
     
-    // Special logging for token exchange
+    // Special logging for token exchange (sanitized for security)
     if (request.nextUrl.pathname === '/api/auth/mcp/token' && request.method === 'POST') {
-      const clonedRequest = request.clone();
-      try {
-        const contentType = request.headers.get('content-type');
-        let body;
-        
-        if (contentType?.includes('application/x-www-form-urlencoded')) {
-          const text = await clonedRequest.text();
-          body = Object.fromEntries(new URLSearchParams(text));
-        } else if (contentType?.includes('application/json')) {
-          body = await clonedRequest.json();
-        } else {
-          body = await clonedRequest.text();
-        }
-        
-        console.log('[Token Exchange Body]:', body);
-      } catch (error) {
-        console.log('[Token Exchange] Error reading body:', error);
-      }
+      // Only log that a token exchange is happening, not the sensitive data
+      console.log('[Token Exchange] Request received');
     }
     
     const allowedOrigins = getAllowedOrigins();
