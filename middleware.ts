@@ -87,18 +87,31 @@ export async function middleware(request: NextRequest) {
     const allowedOrigins = getAllowedOrigins();
     const requestOrigin = request.headers.get('origin');
     
-    // For OAuth metadata endpoints, allow all origins for team flexibility
-    const isOAuthMetadataEndpoint = request.nextUrl.pathname.includes('/.well-known/') ||
-                                   request.nextUrl.pathname.includes('/mcp/register') ||
-                                   request.nextUrl.pathname.includes('/mcp/authorize') ||
-                                   request.nextUrl.pathname.includes('/mcp/token');
+    // For OAuth metadata discovery endpoints only, we need to be more permissive
+    // These are read-only endpoints that don't expose sensitive data
+    const isOAuthDiscoveryEndpoint = request.nextUrl.pathname.includes('/.well-known/');
+    
+    // OAuth action endpoints require proper CORS validation
+    const isOAuthActionEndpoint = request.nextUrl.pathname.includes('/mcp/register') ||
+                                 request.nextUrl.pathname.includes('/mcp/authorize') ||
+                                 request.nextUrl.pathname.includes('/mcp/token');
     
     let allowedOriginHeader = getAllowedOriginHeader(requestOrigin, allowedOrigins);
     
-    // For OAuth endpoints, allow any origin since OAuth provides its own security
-    // This enables team members to use various MCP clients from different locations
-    if (isOAuthMetadataEndpoint && requestOrigin) {
-      allowedOriginHeader = requestOrigin; // Allow any origin for OAuth endpoints
+    // For OAuth discovery endpoints, allow any origin (read-only, no sensitive data)
+    // For OAuth action endpoints, enforce CORS properly
+    if (isOAuthDiscoveryEndpoint && requestOrigin) {
+      allowedOriginHeader = requestOrigin; // Allow any origin for discovery
+    } else if (isOAuthActionEndpoint && !allowedOriginHeader) {
+      // For OAuth action endpoints, if origin not allowed, return early with error
+      console.warn(`[CORS] Blocked OAuth action from origin: ${requestOrigin}`);
+      return new NextResponse(
+        JSON.stringify({ error: 'CORS: Origin not allowed' }),
+        { 
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
     }
     
     const response = NextResponse.next()

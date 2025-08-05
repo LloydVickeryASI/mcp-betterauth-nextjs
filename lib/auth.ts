@@ -17,6 +17,13 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true
   },
+  // Enable account linking so users can connect multiple OAuth providers
+  account: {
+    accountLinking: {
+      enabled: true,
+      trustedProviders: ["hubspot", "pandadoc", "xero"] // Trust these providers for linking
+    }
+  },
   // Force secure cookies in production for proper OAuth state handling
   advanced: {
     useSecureCookies: process.env.NODE_ENV === 'production',
@@ -157,25 +164,41 @@ export const auth = betterAuth({
               }
             } catch (error) {
               console.error("Failed to fetch Xero user info:", error);
+              // Continue with connections fetch even if user info fails
             }
             
             // Get the Xero connections to find the user's tenant
-            const connectionsResponse = await fetch("https://api.xero.com/connections", {
-              headers: {
-                Authorization: `Bearer ${tokens.accessToken}`,
-                "Content-Type": "application/json",
-              },
-            });
-            
-            if (!connectionsResponse.ok) {
+            let connectionsResponse;
+            try {
+              connectionsResponse = await fetch("https://api.xero.com/connections", {
+                headers: {
+                  Authorization: `Bearer ${tokens.accessToken}`,
+                  "Content-Type": "application/json",
+                },
+              });
+            } catch (error) {
+              console.error("Failed to fetch Xero connections:", error);
               return null;
             }
             
-            const connections = await connectionsResponse.json();
+            if (!connectionsResponse || !connectionsResponse.ok) {
+              console.error("Xero connections request failed:", connectionsResponse?.status);
+              return null;
+            }
+            
+            let connections;
+            try {
+              connections = await connectionsResponse.json();
+            } catch (error) {
+              console.error("Failed to parse Xero connections response:", error);
+              return null;
+            }
+            
             // TODO: For users with multiple Xero organizations, consider allowing tenant selection
-            const primaryConnection = connections[0]; // Use the first connection as primary
+            const primaryConnection = connections?.[0]; // Use the first connection as primary
             
             if (!primaryConnection) {
+              console.error("No Xero connections found for user");
               return null;
             }
             

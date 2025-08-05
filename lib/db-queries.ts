@@ -65,3 +65,29 @@ export async function isProviderConnected(db: Pool, userId: string, providerId: 
   
   return { connected: false };
 }
+
+export async function updateAccountTokens(
+  db: Pool, 
+  userId: string, 
+  providerId: string,
+  tokens: {
+    accessToken: string;
+    refreshToken?: string;
+    expiresAt: Date;
+  }
+) {
+  const query = tokens.refreshToken 
+    ? `UPDATE account 
+       SET "accessToken" = $1, "refreshToken" = $2, "accessTokenExpiresAt" = $3, "updatedAt" = NOW()
+       WHERE "userId" = $4 AND "providerId" = $5`
+    : `UPDATE account 
+       SET "accessToken" = $1, "accessTokenExpiresAt" = $2, "updatedAt" = NOW()
+       WHERE "userId" = $3 AND "providerId" = $4`;
+  
+  const params = tokens.refreshToken
+    ? [tokens.accessToken, tokens.refreshToken, tokens.expiresAt, userId, providerId]
+    : [tokens.accessToken, tokens.expiresAt, userId, providerId];
+  
+  const result = await db.query(query, params);
+  return result.rowCount || 0;
+}
