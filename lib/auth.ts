@@ -22,7 +22,13 @@ export const auth = betterAuth({
   account: {
     accountLinking: {
       enabled: true,
-      trustedProviders: ["hubspot", "pandadoc", "xero"] // Trust these providers for linking
+      trustedProviders: ["hubspot", "pandadoc", "xero"], // Trust these providers for linking
+      // Allow linking accounts even if emails don't match
+      // This is important for API connections where the user might use different emails
+      allowDifferentEmails: true,
+      // Don't update the primary user info when linking API providers
+      // We want to keep the Microsoft account as the source of truth
+      updateUserInfoOnLink: false
     }
   },
   // Force secure cookies in production for proper OAuth state handling
@@ -71,6 +77,10 @@ export const auth = betterAuth({
           scopes: [...OAUTH_SCOPES.hubspot],
           accessType: "offline",
           authentication: "post" as const,
+          // Explicitly set the redirect URI for consistency
+          redirectURI: process.env.AUTH_URL 
+            ? `${process.env.AUTH_URL}/api/auth/callback/hubspot`
+            : undefined,
           getUserInfo: async (tokens) => {
             // Get access token info to retrieve user details
             const tokenInfoResponse = await fetch(`https://api.hubapi.com/oauth/v1/access-tokens/${tokens.accessToken}`);
@@ -112,6 +122,10 @@ export const auth = betterAuth({
           scopes: [...OAUTH_SCOPES.pandadoc],
           accessType: "offline",
           authentication: "post" as const,
+          // Explicitly set the redirect URI for consistency
+          redirectURI: process.env.AUTH_URL 
+            ? `${process.env.AUTH_URL}/api/auth/callback/pandadoc`
+            : undefined,
           getUserInfo: async (tokens) => {
             // Get current user info from PandaDoc API
             const userResponse = await fetch("https://api.pandadoc.com/public/v1/members/current", {
@@ -146,6 +160,10 @@ export const auth = betterAuth({
           scopes: [...OAUTH_SCOPES.xero],
           accessType: "offline",
           authentication: "basic" as const,
+          // Explicitly set the redirect URI for consistency
+          redirectURI: process.env.AUTH_URL 
+            ? `${process.env.AUTH_URL}/api/auth/callback/xero`
+            : undefined,
           getUserInfo: async (tokens) => {
             // First, try to get user info from the OpenID Connect endpoint
             let userEmail = "";
@@ -160,6 +178,7 @@ export const auth = betterAuth({
               
               if (userInfoResponse.ok) {
                 const userInfo = await userInfoResponse.json();
+                console.log("[Xero OAuth] User info from OpenID Connect:", userInfo);
                 userEmail = userInfo.email || "";
                 userName = userInfo.name || `${userInfo.given_name || ""} ${userInfo.family_name || ""}`.trim();
               }
@@ -203,16 +222,27 @@ export const auth = betterAuth({
               return null;
             }
             
-            return {
+            // Build the user info object with the actual email from OpenID Connect
+            const userInfo = {
               id: primaryConnection.tenantId,
-              email: userEmail || `xero-user-${primaryConnection.tenantId}@xero.local`, // Fallback email if OpenID doesn't provide one
+              // Use the actual email from Xero OpenID Connect
+              email: userEmail || `xero-${primaryConnection.tenantId}@xero.local`, // Fallback only if no email
               name: userName || primaryConnection.tenantName || "Xero User",
-              emailVerified: true,
+              emailVerified: !!userEmail, // Verified if we got it from OpenID Connect
               createdAt: new Date(),
               updatedAt: new Date(),
               // Store tenant ID in providerAccountId for later use
               providerAccountId: primaryConnection.tenantId,
             };
+            
+            console.log("[Xero OAuth] Returning user info:", {
+              id: userInfo.id,
+              email: userInfo.email,
+              name: userInfo.name,
+              providerAccountId: userInfo.providerAccountId
+            });
+            
+            return userInfo;
           },
         },
       ],
