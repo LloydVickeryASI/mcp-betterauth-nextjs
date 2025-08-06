@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { authClient } from "@/lib/auth-client";
 
 interface ConnectionStatus {
@@ -15,8 +15,10 @@ interface ConnectionStatus {
 
 export default function Connections() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [connections, setConnections] = useState<ConnectionStatus[]>([]);
+  const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
   const session = authClient.useSession();
 
   useEffect(() => {
@@ -27,8 +29,30 @@ export default function Connections() {
       return;
     }
     
+    // Check for query parameters that indicate OAuth callback status
+    const provider = searchParams.get('provider');
+    const status = searchParams.get('status');
+    const connected = searchParams.get('connected');
+    
+    if (provider && status === 'error') {
+      setNotification({
+        type: 'error',
+        message: `There was an issue connecting ${provider}. Please check if the connection was successful below or try again.`
+      });
+    } else if (provider && status === 'check') {
+      setNotification({
+        type: 'info',
+        message: `Verifying ${provider} connection status...`
+      });
+    } else if (connected) {
+      setNotification({
+        type: 'success',
+        message: `Successfully connected to ${connected}!`
+      });
+    }
+    
     fetchConnectionStatus();
-  }, [session.isPending, session.data, router]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [session.isPending, session.data, router, searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchConnectionStatus = async () => {
     try {
@@ -50,10 +74,28 @@ export default function Connections() {
   };
 
   const handleConnect = async (provider: string) => {
-    await authClient.signIn.social({
-      provider,
-      callbackURL: `/connections?connected=${provider}`,
-    });
+    // For generic OAuth providers, we need to ensure the user is already authenticated
+    // and then link the new provider to their existing account
+    if (!session.data?.user) {
+      router.push('/sign-in');
+      return;
+    }
+
+    try {
+      // Better Auth recommends using oauth2.link() for generic OAuth providers
+      // This ensures the provider is linked to the existing session rather than
+      // creating a new authentication session
+      await authClient.oauth2.link({
+        providerId: provider,
+        callbackURL: `/connections?connected=${provider}`,
+      });
+    } catch (error) {
+      console.error(`Failed to connect ${provider}:`, error);
+      setNotification({
+        type: 'error',
+        message: `Failed to connect to ${provider}. Please try again.`
+      });
+    }
   };
 
   const handleDisconnect = async (provider: string) => {
@@ -126,6 +168,24 @@ export default function Connections() {
             <p className="text-sm text-blue-800">
               Signed in as <strong>{session.data.user.email}</strong> with Microsoft
             </p>
+          </div>
+        )}
+
+        {notification && (
+          <div className={`p-4 rounded-lg mb-6 ${
+            notification.type === 'error' ? 'bg-red-50 text-red-800' :
+            notification.type === 'success' ? 'bg-green-50 text-green-800' :
+            'bg-yellow-50 text-yellow-800'
+          }`}>
+            <div className="flex justify-between items-start">
+              <p className="text-sm">{notification.message}</p>
+              <button
+                onClick={() => setNotification(null)}
+                className="ml-4 text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
           </div>
         )}
 

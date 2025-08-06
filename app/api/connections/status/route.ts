@@ -53,14 +53,16 @@ export async function GET(req: Request) {
         connection.connected = true;
         connection.connectedAt = account.createdAt;
         
-        // Try to get email from the user's account data
-        if (account.providerId === 'hubspot' || account.providerId === 'pandadoc') {
-          // You might need to fetch this from the provider's API or store it during auth
-          connection.email = account.email || session.user.email;
-        } else if (account.providerId === 'xero') {
-          // Xero stores email from OpenID Connect or uses fallback
-          connection.email = account.email || '';
-          connection.name = account.name || 'Xero User';
+        // Since the account table doesn't store provider-specific emails,
+        // we show the main user's email for all connections
+        // This is correct because all these accounts are linked to the same user
+        connection.email = session.user.email;
+        
+        // For Xero, we can show the organization name if needed
+        if (account.providerId === 'xero') {
+          // The accountId for Xero is the tenant ID
+          // We could fetch the tenant name from Xero API if needed
+          connection.name = session.user.name || 'Xero Account';
         }
       }
     }
