@@ -157,6 +157,16 @@ export const auth = betterAuth({
           // Force prompt for account selection
           prompt: "select_account",
           getUserInfo: async (tokens) => {
+            // Use Sentry for production logging
+            Sentry.addBreadcrumb({
+              category: 'xero.oauth',
+              message: 'getUserInfo called',
+              level: 'info',
+              data: {
+                hasAccessToken: !!tokens.accessToken,
+                hasRefreshToken: !!tokens.refreshToken,
+              }
+            });
             console.log("[Xero OAuth] getUserInfo called with tokens");
             
             // First, try to get user info from the OpenID Connect endpoint
@@ -174,16 +184,26 @@ export const auth = betterAuth({
                 const userInfo = await userInfoResponse.json();
                 console.log("[Xero OAuth] User info from OpenID Connect:", userInfo);
                 
-                // Log to Sentry for debugging user-specific issues
+                // IMPORTANT: Log full details to Sentry for production debugging
                 Sentry.addBreadcrumb({
                   category: 'xero.oauth',
-                  message: 'Xero user info retrieved',
+                  message: `Xero user info retrieved: ${userInfo.email}`,
                   level: 'info',
                   data: {
                     email: userInfo.email,
                     name: userInfo.name,
                     xero_userid: userInfo.xero_userid,
                     sub: userInfo.sub,
+                    preferred_username: userInfo.preferred_username,
+                  }
+                });
+                
+                // Also capture as a message for better visibility
+                Sentry.captureMessage(`Xero OAuth: User ${userInfo.email} authenticated`, {
+                  level: 'info',
+                  tags: {
+                    'xero.email': userInfo.email,
+                    'xero.userid': userInfo.xero_userid,
                   }
                 });
                 

@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { authClient } from "@/lib/auth-client";
+import * as Sentry from "@sentry/nextjs";
 
 interface ConnectionStatus {
   provider: string;
@@ -82,7 +83,20 @@ function ConnectionsContent() {
     }
 
     try {
-      console.log(`[Connections] User ${session.data.user.email} initiating OAuth link for ${provider}`);
+      // Log to both console and Sentry for production debugging
+      const message = `User ${session.data.user.email} initiating OAuth link for ${provider}`;
+      console.log(`[Connections] ${message}`);
+      
+      Sentry.addBreadcrumb({
+        category: 'connections',
+        message: message,
+        level: 'info',
+        data: {
+          userEmail: session.data.user.email,
+          userId: session.data.user.id,
+          provider: provider,
+        }
+      });
       
       // Better Auth recommends using oauth2.link() for generic OAuth providers
       // This ensures the provider is linked to the existing session rather than
@@ -93,6 +107,19 @@ function ConnectionsContent() {
       });
     } catch (error) {
       console.error(`Failed to connect ${provider}:`, error);
+      
+      // Capture connection errors in Sentry
+      Sentry.captureException(error, {
+        tags: {
+          'connection.provider': provider,
+          'connection.user': session.data?.user?.email,
+        },
+        extra: {
+          userId: session.data?.user?.id,
+          provider: provider,
+        }
+      });
+      
       setNotification({
         type: 'error',
         message: `Failed to connect to ${provider}. Please try again.`
