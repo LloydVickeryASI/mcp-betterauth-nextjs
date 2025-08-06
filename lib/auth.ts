@@ -77,10 +77,6 @@ export const auth = betterAuth({
           scopes: [...OAUTH_SCOPES.hubspot],
           accessType: "offline",
           authentication: "post" as const,
-          // Explicitly set the redirect URI for consistency
-          redirectURI: process.env.AUTH_URL 
-            ? `${process.env.AUTH_URL}/api/auth/callback/hubspot`
-            : undefined,
           getUserInfo: async (tokens) => {
             // Get access token info to retrieve user details
             const tokenInfoResponse = await fetch(`https://api.hubapi.com/oauth/v1/access-tokens/${tokens.accessToken}`);
@@ -122,10 +118,6 @@ export const auth = betterAuth({
           scopes: [...OAUTH_SCOPES.pandadoc],
           accessType: "offline",
           authentication: "post" as const,
-          // Explicitly set the redirect URI for consistency
-          redirectURI: process.env.AUTH_URL 
-            ? `${process.env.AUTH_URL}/api/auth/callback/pandadoc`
-            : undefined,
           getUserInfo: async (tokens) => {
             // Get current user info from PandaDoc API
             const userResponse = await fetch("https://api.pandadoc.com/public/v1/members/current", {
@@ -160,10 +152,6 @@ export const auth = betterAuth({
           scopes: [...OAUTH_SCOPES.xero],
           accessType: "offline",
           authentication: "basic" as const,
-          // Explicitly set the redirect URI for consistency
-          redirectURI: process.env.AUTH_URL 
-            ? `${process.env.AUTH_URL}/api/auth/callback/xero`
-            : undefined,
           getUserInfo: async (tokens) => {
             // First, try to get user info from the OpenID Connect endpoint
             let userEmail = "";
