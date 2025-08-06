@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { toNextJsHandler } from "better-auth/next-js";
 import { NextRequest, NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 
 // Force Node.js runtime for auth routes to ensure proper database handling
 export const runtime = "nodejs";
@@ -12,7 +13,33 @@ export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const pathname = url.pathname;
   
+  // Extract user email from state or cookies for Sentry tracking
+  // This helps debug user-specific OAuth issues
+  const cookies = request.headers.get('cookie');
+  
   try {
+    // Add breadcrumb for OAuth callbacks
+    if (pathname.includes('/callback/')) {
+      const provider = pathname.includes('/oauth2/callback/') 
+        ? pathname.split('/oauth2/callback/')[1]?.split('?')[0]
+        : pathname.split('/callback/')[1]?.split('?')[0];
+      
+      Sentry.addBreadcrumb({
+        category: 'oauth',
+        message: `OAuth callback for ${provider}`,
+        level: 'info',
+        data: {
+          provider,
+          url: request.url,
+          // Log query params (excluding sensitive tokens)
+          hasCode: url.searchParams.has('code'),
+          hasState: url.searchParams.has('state'),
+          hasError: url.searchParams.has('error'),
+          error: url.searchParams.get('error'),
+        }
+      });
+    }
+    
     const response = await handlers.GET(request);
     
     // Check if this was an OAuth callback that succeeded (both /callback/ and /oauth2/callback/ patterns)
@@ -39,6 +66,25 @@ export async function GET(request: NextRequest) {
     return response;
   } catch (error) {
     console.error('[Auth Route] Error handling request:', error);
+    
+    // Capture OAuth errors in Sentry with context
+    if (pathname.includes('/callback/') || pathname.includes('/oauth2/callback/')) {
+      const provider = pathname.includes('/oauth2/callback/') 
+        ? pathname.split('/oauth2/callback/')[1]?.split('?')[0]
+        : pathname.split('/callback/')[1]?.split('?')[0];
+      
+      Sentry.captureException(error, {
+        tags: {
+          'oauth.provider': provider,
+          'oauth.callback': true,
+        },
+        extra: {
+          url: request.url,
+          pathname,
+          error_message: error instanceof Error ? error.message : String(error),
+        }
+      });
+    }
     
     // Check if this is an OAuth callback error (handle both patterns)
     if (pathname.includes('/callback/') || pathname.includes('/oauth2/callback/')) {

@@ -5,6 +5,7 @@ import { nextCookies } from "better-auth/next-js";
 import { Pool } from "@neondatabase/serverless";
 import { getBaseUrl } from "./get-base-url";
 import { OAUTH_SCOPES } from "./oauth-scopes";
+import * as Sentry from "@sentry/nextjs";
 
 export const auth = betterAuth({
   database: new Pool({
@@ -167,8 +168,25 @@ export const auth = betterAuth({
               if (userInfoResponse.ok) {
                 const userInfo = await userInfoResponse.json();
                 console.log("[Xero OAuth] User info from OpenID Connect:", userInfo);
+                
+                // Log to Sentry for debugging user-specific issues
+                Sentry.addBreadcrumb({
+                  category: 'xero.oauth',
+                  message: 'Xero user info retrieved',
+                  level: 'info',
+                  data: {
+                    email: userInfo.email,
+                    name: userInfo.name,
+                    xero_userid: userInfo.xero_userid,
+                    sub: userInfo.sub,
+                  }
+                });
+                
                 userEmail = userInfo.email || "";
                 userName = userInfo.name || `${userInfo.given_name || ""} ${userInfo.family_name || ""}`.trim();
+              } else {
+                console.error("[Xero OAuth] Failed to get user info, status:", userInfoResponse.status);
+                Sentry.captureMessage(`Xero user info request failed with status ${userInfoResponse.status}`, 'error');
               }
             } catch (error) {
               console.error("Failed to fetch Xero user info:", error);
