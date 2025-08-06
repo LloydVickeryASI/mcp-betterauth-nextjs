@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { authClient } from "@/lib/auth-client";
 
@@ -13,7 +13,7 @@ interface ConnectionStatus {
   scopes?: string[];
 }
 
-export default function Connections() {
+function ConnectionsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
@@ -317,5 +317,17 @@ export default function Connections() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function Connections() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-gray-500">Loading connections...</div>
+      </div>
+    }>
+      <ConnectionsContent />
+    </Suspense>
   );
 }
