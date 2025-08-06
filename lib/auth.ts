@@ -148,12 +148,17 @@ export const auth = betterAuth({
           providerId: "xero",
           clientId: process.env.XERO_CLIENT_ID!,
           clientSecret: process.env.XERO_CLIENT_SECRET!,
-          authorizationUrl: "https://login.xero.com/identity/connect/authorize?prompt=select_account",
+          // Force account selection to prevent cached sessions
+          authorizationUrl: "https://login.xero.com/identity/connect/authorize",
           tokenUrl: "https://identity.xero.com/connect/token",
           scopes: [...OAUTH_SCOPES.xero],
           accessType: "offline",
           authentication: "basic" as const,
+          // Force prompt for account selection
+          prompt: "select_account",
           getUserInfo: async (tokens) => {
+            console.log("[Xero OAuth] getUserInfo called with tokens");
+            
             // First, try to get user info from the OpenID Connect endpoint
             let userEmail = "";
             let userName = "";

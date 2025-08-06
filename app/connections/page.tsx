@@ -82,6 +82,8 @@ function ConnectionsContent() {
     }
 
     try {
+      console.log(`[Connections] User ${session.data.user.email} initiating OAuth link for ${provider}`);
+      
       // Better Auth recommends using oauth2.link() for generic OAuth providers
       // This ensures the provider is linked to the existing session rather than
       // creating a new authentication session
