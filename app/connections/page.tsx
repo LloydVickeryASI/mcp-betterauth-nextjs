@@ -34,8 +34,14 @@ function ConnectionsContent() {
     const provider = searchParams.get('provider');
     const status = searchParams.get('status');
     const connected = searchParams.get('connected');
+    const error = searchParams.get('error');
     
-    if (provider && status === 'error') {
+    if (error === 'already_linked' && provider) {
+      setNotification({
+        type: 'error',
+        message: `This ${provider} account is already linked to another user. Each ${provider} account can only be connected to one user at a time.`
+      });
+    } else if (provider && status === 'error') {
       setNotification({
         type: 'error',
         message: `There was an issue connecting ${provider}. Please check if the connection was successful below or try again.`

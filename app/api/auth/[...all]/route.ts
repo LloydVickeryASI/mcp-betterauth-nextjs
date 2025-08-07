@@ -50,10 +50,23 @@ export async function GET(request: NextRequest) {
       if (location?.includes('error=')) {
         console.error('[OAuth Callback] Redirect with error detected:', location);
         
+        // Extract the error from the location URL
+        const errorUrl = new URL(location, request.url);
+        const errorType = errorUrl.searchParams.get('error');
+        
         // Extract the provider from the pathname (handle both patterns)
         const provider = pathname.includes('/oauth2/callback/') 
           ? pathname.split('/oauth2/callback/')[1]?.split('?')[0]
           : pathname.split('/callback/')[1]?.split('?')[0];
+        
+        // Handle specific error types
+        if (errorType === 'account_already_linked_to_different_user') {
+          // This OAuth account is already linked to another user
+          // Redirect to connections page with specific error message
+          if (provider && ['hubspot', 'pandadoc', 'xero'].includes(provider)) {
+            return NextResponse.redirect(new URL(`/connections?provider=${provider}&error=already_linked`, request.url));
+          }
+        }
         
         // For HubSpot and other provider callbacks, redirect to connections page
         // even if there was an error, as the connection might still be saved

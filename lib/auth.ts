@@ -172,6 +172,7 @@ export const auth = betterAuth({
             // First, try to get user info from the OpenID Connect endpoint
             let userEmail = "";
             let userName = "";
+            let xeroUserId = ""; // IMPORTANT: This is the unique user ID, not tenant ID
             
             try {
               const userInfoResponse = await fetch("https://identity.xero.com/connect/userinfo", {
@@ -198,15 +199,19 @@ export const auth = betterAuth({
                   }
                 });
                 
-                // Also capture as a message for better visibility
-                Sentry.captureMessage(`Xero OAuth: User ${userInfo.email} authenticated`, {
+                // Add breadcrumb for successful authentication (doesn't create issues)
+                Sentry.addBreadcrumb({
+                  message: `Xero OAuth: User ${userInfo.email} authenticated`,
                   level: 'info',
-                  tags: {
+                  category: 'auth',
+                  data: {
                     'xero.email': userInfo.email,
                     'xero.userid': userInfo.xero_userid,
                   }
                 });
                 
+                // Extract user-specific ID (xero_userid is the unique user identifier)
+                xeroUserId = userInfo.xero_userid || userInfo.sub || "";
                 userEmail = userInfo.email || "";
                 userName = userInfo.name || `${userInfo.given_name || ""} ${userInfo.family_name || ""}`.trim();
               } else {
@@ -255,22 +260,26 @@ export const auth = betterAuth({
             
             // Build the user info object with the actual email from OpenID Connect
             const userInfo = {
-              id: primaryConnection.tenantId,
+              // CRITICAL: Use xeroUserId (user-specific) not tenantId (org-specific)
+              // This allows multiple users from the same Xero org to connect
+              id: xeroUserId || `xero-user-${Date.now()}`, // Fallback to unique ID if no user ID
               // Use the actual email from Xero OpenID Connect
-              email: userEmail || `xero-${primaryConnection.tenantId}@xero.local`, // Fallback only if no email
+              email: userEmail || `xero-${xeroUserId || primaryConnection.tenantId}@xero.local`, // Fallback only if no email
               name: userName || primaryConnection.tenantName || "Xero User",
               emailVerified: !!userEmail, // Verified if we got it from OpenID Connect
               createdAt: new Date(),
               updatedAt: new Date(),
-              // Store tenant ID in providerAccountId for later use
-              providerAccountId: primaryConnection.tenantId,
+              // Store tenant ID separately - this is the organization ID we'll use for API calls
+              providerAccountId: xeroUserId || `xero-user-${Date.now()}`, // This should match the id field
+              tenantId: primaryConnection.tenantId, // Keep tenant ID for API calls
             };
             
             console.log("[Xero OAuth] Returning user info:", {
               id: userInfo.id,
               email: userInfo.email,
               name: userInfo.name,
-              providerAccountId: userInfo.providerAccountId
+              providerAccountId: userInfo.providerAccountId,
+              tenantId: userInfo.tenantId,
             });
             
             return userInfo;
