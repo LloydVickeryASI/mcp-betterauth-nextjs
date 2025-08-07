@@ -23,8 +23,37 @@ function getAllowedOrigins(): string[] {
     'http://localhost:3000',
     'http://127.0.0.1:3000',
     'https://localhost:3000',
-    'https://127.0.0.1:3000'
+    'https://127.0.0.1:3000',
+    // Common MCP Inspector client origins
+    'http://localhost:6274',
+    'http://127.0.0.1:6274',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173'
   ];
+}
+
+/**
+ * Get pattern-based allowed origins for flexible matching (supports wildcards)
+ * Examples:
+ *   - https://*.openai.com
+ *   - https://*.anthropic.com
+ *   - http://localhost:*
+ */
+function getAllowedOriginPatterns(): string[] {
+  const patterns = process.env.ALLOWED_ORIGIN_PATTERNS;
+  if (patterns) {
+    return patterns.split(',').map(p => p.trim());
+  }
+  return [];
+}
+
+/** Convert a simple wildcard pattern to RegExp */
+function wildcardToRegExp(pattern: string): RegExp {
+  // Escape regex special chars except * and :
+  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+    .replace(/\*/g, '.*')
+    .replace(/:\*/g, ':[0-9]{1,5}');
+  return new RegExp(`^${escaped}$`);
 }
 
 /**
@@ -39,7 +68,21 @@ function isOriginAllowed(origin: string | null, allowedOrigins: string[]): boole
     return true;
   }
   
-  return allowedOrigins.includes(origin) || allowedOrigins.includes('*');
+  if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+    return true;
+  }
+
+  // Pattern-based allow list
+  const patterns = getAllowedOriginPatterns();
+  for (const pattern of patterns) {
+    if (pattern === '*') return true;
+    try {
+      if (wildcardToRegExp(pattern).test(origin)) return true;
+    } catch {
+      // ignore invalid pattern
+    }
+  }
+  return false;
 }
 
 /**
@@ -85,23 +128,31 @@ export async function middleware(request: NextRequest) {
     // For OAuth discovery endpoints, allow any origin (read-only, no sensitive data)
     // For OAuth action endpoints, enforce CORS properly
     if (isOAuthDiscoveryEndpoint && requestOrigin) {
-      allowedOriginHeader = requestOrigin; // Allow any origin for discovery
-    } else if (isOAuthActionEndpoint && !allowedOriginHeader) {
-      // In development, be more permissive for local testing
-      // Allow requests without origin header (direct browser access, some tools)
-      if (process.env.NODE_ENV === 'development' && !requestOrigin) {
-        console.log('[CORS] Development mode: Allowing request without origin header');
-        // Continue without blocking
-      } else {
-        // For OAuth action endpoints, if origin not allowed, return early with error
-        console.warn(`[CORS] Blocked OAuth action from origin: ${requestOrigin}`);
-        return new NextResponse(
-          JSON.stringify({ error: 'CORS: Origin not allowed' }),
-          { 
-            status: 403,
-            headers: { 'Content-Type': 'application/json' }
-          }
-        );
+      // Allow any origin for read-only discovery
+      allowedOriginHeader = requestOrigin;
+    } else if (isOAuthActionEndpoint) {
+      const allowAllForMcp = process.env.ALLOW_ALL_ORIGINS_FOR_MCP === 'true';
+      const allowNullOrigin = process.env.ALLOW_NULL_ORIGIN === 'true';
+      // For anonymous endpoints like registration and token, optionally allow all
+      if (!allowedOriginHeader) {
+        if (allowAllForMcp) {
+          // Use wildcard; do not set credentials with '*'
+          allowedOriginHeader = '*';
+        } else if (!requestOrigin && allowNullOrigin) {
+          // Desktop apps / non-browser contexts
+          allowedOriginHeader = '*';
+        } else if (process.env.NODE_ENV === 'development' && !requestOrigin) {
+          console.log('[CORS] Development mode: Allowing request without origin header');
+        } else {
+          console.warn(`[CORS] Blocked OAuth action from origin: ${requestOrigin}`);
+          return new NextResponse(
+            JSON.stringify({ error: 'CORS: Origin not allowed' }),
+            { 
+              status: 403,
+              headers: { 'Content-Type': 'application/json' }
+            }
+          );
+        }
       }
     }
     
@@ -118,7 +169,9 @@ export async function middleware(request: NextRequest) {
       // Set origin header if the origin is allowed
       if (allowedOriginHeader) {
         corsHeaders['Access-Control-Allow-Origin'] = allowedOriginHeader;
-        corsHeaders['Access-Control-Allow-Credentials'] = 'true';
+        if (allowedOriginHeader !== '*') {
+          corsHeaders['Access-Control-Allow-Credentials'] = 'true';
+        }
       }
       
       return new NextResponse(null, {
@@ -130,7 +183,9 @@ export async function middleware(request: NextRequest) {
     // Add CORS headers to all responses if origin is allowed
     if (allowedOriginHeader) {
       response.headers.set('Access-Control-Allow-Origin', allowedOriginHeader);
-      response.headers.set('Access-Control-Allow-Credentials', 'true');
+      if (allowedOriginHeader !== '*') {
+        response.headers.set('Access-Control-Allow-Credentials', 'true');
+      }
     }
     response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');

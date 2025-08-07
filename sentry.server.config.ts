@@ -22,12 +22,28 @@ Sentry.init({
     if (process.env.NODE_ENV === 'development') {
       console.log('[Sentry] Sending event:', event.type || 'error', event.event_id);
     }
+    
+    // Filter out false positive params warnings
+    if (event.exception?.values?.[0]?.value?.includes('used `...params`')) {
+      return null; // Don't send this event to Sentry
+    }
+    
     return event;
   },
   
   // Capture console logs as breadcrumbs
   beforeBreadcrumb: (breadcrumb, hint) => {
-    if (process.env.NODE_ENV === 'development') {
+    // Filter out Sentry's own HTTP requests
+    if (breadcrumb.category === 'http' && breadcrumb.data?.url?.includes('sentry.io')) {
+      return null; // Don't capture Sentry's own requests
+    }
+    
+    // Filter out undefined HTTP breadcrumbs
+    if (breadcrumb.category === 'http' && !breadcrumb.message) {
+      return null; // Don't capture undefined HTTP breadcrumbs
+    }
+    
+    if (process.env.NODE_ENV === 'development' && breadcrumb.message) {
       console.log('[Sentry] Breadcrumb:', breadcrumb.category, breadcrumb.message);
     }
     return breadcrumb;
