@@ -26,7 +26,7 @@ export function registerPandaDocTools(server: any) {
   // Create quote tool
   createProviderTool(server, {
     name: "create_pandadoc_quote",
-    description: "Creates a professional customer quote in PandaDoc from supplier pricing information. This is the main tool for ASI Solutions staff to convert supplier quotes into customer-facing quotes with appropriate margins. The tool takes supplier cost prices and calculates sell prices with markup. Use this when processing a new supplier quote that needs to be converted into a customer quote.",
+    description: "Creates a professional customer quote in PandaDoc from supplier pricing information. In normal operation, ALL quotes must be linked to a HubSpot deal (provide hubspot_deal_id). You may omit the deal ID only in emergencies to create an unlinked quote. This is the main tool for ASI Solutions staff to convert supplier quotes into customer-facing quotes with appropriate margins. The tool takes supplier cost prices and calculates sell prices with markup.",
     provider: "pandadoc",
     schema: createQuoteSchema,
     handler: createQuoteHandler

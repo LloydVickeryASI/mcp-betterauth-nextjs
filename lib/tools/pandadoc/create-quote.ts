@@ -23,7 +23,8 @@ export const createQuoteSchema = {
   opportunity_name: z.string().describe("Opportunity/project name"),
   sections: z.array(SectionSchema).describe("Quote sections with line items"),
   template_id: z.string().optional().describe("PandaDoc template ID (optional)"),
-  recipient_email: z.string().email().describe("Recipient email address")
+  recipient_email: z.string().email().describe("Recipient email address"),
+  hubspot_deal_id: z.string().optional().describe("HubSpot deal ID to link this PandaDoc document to. REQUIRED in normal operation (quotes must be linked to a deal); only omit in emergencies to allow creating an unlinked quote.")
 };
 
 type CreateQuoteArgs = {
@@ -43,6 +44,7 @@ type CreateQuoteArgs = {
   }>;
   template_id?: string;
   recipient_email: string;
+  hubspot_deal_id?: string;
 };
 
 export async function createQuoteHandler(
@@ -104,6 +106,25 @@ export async function createQuoteHandler(
     }
   }
   
+  // Optionally link the created PandaDoc document to a HubSpot deal
+  let hubspotLink: { linked: boolean; deal_id?: string; error?: string } | undefined;
+  if (args.hubspot_deal_id) {
+    try {
+      await api.post(
+        `/documents/${documentId}/linked-objects`,
+        'create_linked_object',
+        {
+          provider: 'hubspot',
+          type: 'deal',
+          id: args.hubspot_deal_id
+        }
+      );
+      hubspotLink = { linked: true, deal_id: args.hubspot_deal_id };
+    } catch (error: any) {
+      hubspotLink = { linked: false, deal_id: args.hubspot_deal_id, error: error?.message || 'Failed to link HubSpot deal' };
+    }
+  }
+
   return {
     content: [{
       type: "text",
@@ -114,6 +135,7 @@ export async function createQuoteHandler(
         status: response.data.status,
         date_created: response.data.date_created,
         pandadoc_url: pandadocUrl,
+        hubspot_link: hubspotLink,
         message: `Quote document created successfully. View at: ${pandadocUrl}`
       }, null, 2)
     }],
