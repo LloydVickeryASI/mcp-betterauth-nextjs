@@ -3,6 +3,7 @@ import { ProviderApiHelper } from "../provider-api-helper";
 import type { ProviderToolContext } from "../create-provider-tool";
 import { getAccountByUserIdAndProvider } from "@/lib/db-queries";
 import { Pool } from "@neondatabase/serverless";
+import { getBaseUrl } from "@/lib/get-base-url";
 
 export const createUpdatePurchaseOrderSchema = {
   purchaseOrderId: z.string().optional().describe("The ID of an existing purchase order to update. If not provided, a new purchase order will be created"),
@@ -56,19 +57,60 @@ export async function createUpdatePurchaseOrderHandler(
   // Create API helper with context
   const api = new ProviderApiHelper(context);
   
-  // Get the tenant ID from the account
+  // Resolve a valid access token and tenant ID
   const db = context.db as Pool;
   const account = await getAccountByUserIdAndProvider(db, context.session.userId, 'xero');
-  
-  // Xero stores the tenant ID in the providerAccountId field
-  const tenantId = account?.providerAccountId || account?.accountId;
+
+  let accessToken = account?.accessToken as string | undefined;
+  if (!accessToken) {
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({ error: true, message: "No Xero access token found. Please reconnect your Xero account." }, null, 2)
+      }],
+    };
+  }
+
+  if (account?.accessTokenExpiresAt && new Date(account.accessTokenExpiresAt) <= new Date() && account?.refreshToken) {
+    try {
+      const refreshResponse = await fetch(`${getBaseUrl()}/api/auth/refresh/xero`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${context.session.token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (refreshResponse.ok) {
+        const data = await refreshResponse.json();
+        accessToken = data.accessToken;
+      }
+    } catch {}
+  }
+
+  // Fetch tenant connections from Xero
+  let tenantId: string | undefined;
+  try {
+    const connectionsRes = await fetch('https://api.xero.com/connections', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+    });
+    if (connectionsRes.ok) {
+      const connections = await connectionsRes.json();
+      tenantId = connections?.[0]?.tenantId;
+    }
+  } catch {}
+
   if (!tenantId) {
     return {
       content: [{
         type: "text",
         text: JSON.stringify({
           error: true,
-          message: "No Xero tenant ID found. Please reconnect your Xero account."
+          message: "No Xero tenant found for this user. Please reconnect your Xero account.",
         }, null, 2)
       }],
     };

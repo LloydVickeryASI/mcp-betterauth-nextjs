@@ -42,7 +42,8 @@ export class ProviderApiHelper {
       body,
       {
         ...options,
-        authMethod: this.context.authMethod
+        authMethod: this.context.authMethod,
+        userToken: this.context.session.token
       }
     );
   }
