@@ -15,7 +15,7 @@ const hubspotObjectEnum = z.enum([
 // Common types
 const sortSchema = z.object({
   propertyName: z.string(),
-  direction: z.enum(["ASC", "DESC"]).default("ASC"),
+  direction: z.enum(["ASCENDING", "DESCENDING"]).default("ASCENDING"),
 });
 
 const filterSchema = z.object({
