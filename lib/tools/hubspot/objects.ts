@@ -95,6 +95,9 @@ export async function searchHubspotObjectsHandler(
   };
 }
 
+// Allowed association targets per from-object (start with deals)
+const dealsAssociationTargets = z.enum(["companies", "contacts"]);
+
 // CRUD tool schema
 export const hubspotObjectsSchema = {
   action: z.enum(["get", "create", "update", "delete"]).describe("CRUD action to perform"),
@@ -102,6 +105,16 @@ export const hubspotObjectsSchema = {
   id: z.string().optional().describe("Record ID (required for get/update/delete)"),
   properties: z.record(z.any()).optional().describe("Properties payload (create/update)"),
   select: z.array(z.string()).optional().describe("Properties to return for get"),
+  associations: z
+    .array(
+      z.object({
+        toObject: dealsAssociationTargets.describe("Target object to associate with (for deals: companies|contacts)"),
+        toIds: z.array(z.string()).min(1).describe("IDs of target records to associate"),
+        type: z.string().optional().describe("Optional association type label; defaults to '<from>_to_<to>'"),
+      })
+    )
+    .optional()
+    .describe("Create associations after create/update"),
 };
 
 type CrudArgs = {
@@ -110,6 +123,7 @@ type CrudArgs = {
   id?: string;
   properties?: Record<string, any>;
   select?: string[];
+  associations?: { toObject: z.infer<typeof dealsAssociationTargets>; toIds: string[]; type?: string }[];
 };
 
 export async function hubspotObjectsHandler(
@@ -119,6 +133,31 @@ export async function hubspotObjectsHandler(
   const api = new ProviderApiHelper(context);
 
   const basePath = `/crm/v3/objects/${args.object}`;
+
+  const singularize = (plural: string) => {
+    if (plural === "deals") return "deal";
+    if (plural === "companies") return "company";
+    if (plural === "contacts") return "contact";
+    return plural.replace(/s$/, "");
+  };
+
+  const createAssociationsIfRequested = async (fromObject: string, fromId: string) => {
+    const requested = args.associations?.filter(a => a.toIds?.length);
+    if (!requested || requested.length === 0) return undefined;
+    const results: any[] = [];
+    for (const assoc of requested) {
+      const toObject = assoc.toObject;
+      const type = assoc.type ?? `${singularize(fromObject)}_to_${singularize(toObject)}`;
+      const inputs = assoc.toIds.map(toId => ({ from: { id: fromId }, to: { id: toId }, type }));
+      const res = await api.post(
+        `/crm/v4/associations/${fromObject}/${toObject}/batch/create`,
+        `associate_${fromObject}_to_${toObject}`,
+        { inputs }
+      );
+      results.push({ toObject, count: inputs.length, raw: (res as any).data });
+    }
+    return results;
+  };
 
   if (args.action === "get") {
     if (!args.id) {
@@ -135,7 +174,12 @@ export async function hubspotObjectsHandler(
       return { content: [{ type: "text", text: JSON.stringify({ error: true, message: "properties are required for create" }, null, 2) }] };
     }
     const res = await api.post(basePath, `create_${args.object}`, { properties: args.properties });
-    return { content: [{ type: "text", text: JSON.stringify({ authenticated: true, object: args.object, result: (res as any).data }, null, 2) }] };
+    const created = (res as any).data;
+    let assocResults: any | undefined;
+    if (created?.id && args.associations && args.associations.length) {
+      assocResults = await createAssociationsIfRequested(args.object, created.id);
+    }
+    return { content: [{ type: "text", text: JSON.stringify({ authenticated: true, object: args.object, result: created, associations: assocResults }, null, 2) }] };
   }
 
   if (args.action === "update") {
@@ -146,7 +190,12 @@ export async function hubspotObjectsHandler(
       return { content: [{ type: "text", text: JSON.stringify({ error: true, message: "properties are required for update" }, null, 2) }] };
     }
     const res = await api.patch(`${basePath}/${args.id}`, `update_${args.object}`, { properties: args.properties });
-    return { content: [{ type: "text", text: JSON.stringify({ authenticated: true, object: args.object, result: (res as any).data }, null, 2) }] };
+    const updated = (res as any).data;
+    let assocResults: any | undefined;
+    if (args.associations && args.associations.length) {
+      assocResults = await createAssociationsIfRequested(args.object, args.id);
+    }
+    return { content: [{ type: "text", text: JSON.stringify({ authenticated: true, object: args.object, result: updated, associations: assocResults }, null, 2) }] };
   }
 
   if (args.action === "delete") {
