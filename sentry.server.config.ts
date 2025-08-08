@@ -92,11 +92,11 @@ Sentry.init({
     /^https:\/\//,
   ],
   
-  // Set environment
-  environment: process.env.NODE_ENV || 'development',
+  // Set environment (prefer Sentry/Vercel-specific values in production)
+  environment: process.env.SENTRY_ENVIRONMENT || process.env.VERCEL_ENV || process.env.NODE_ENV || 'development',
   
-  // Set release version
-  release: `mcp-betterauth-nextjs@${process.env.npm_package_version || '1.0.0'}`,
+  // Set release to commit SHA when on Vercel for better grouping
+  release: process.env.SENTRY_RELEASE || process.env.VERCEL_GIT_COMMIT_SHA || `mcp-betterauth-nextjs@${process.env.npm_package_version || '1.0.0'}`,
   
   // Attach stacktrace to messages
   attachStacktrace: true,

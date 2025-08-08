@@ -11,6 +11,10 @@ export async function register() {
       process.exit(1);
     }
     
+    // Ensure DSN exists in prod to avoid silent no-op
+    if (!process.env.NEXT_PUBLIC_SENTRY_DSN && (process.env.VERCEL_ENV === 'production' || process.env.SENTRY_ENVIRONMENT === 'production')) {
+      console.warn('[Sentry] NEXT_PUBLIC_SENTRY_DSN is not set in production environment');
+    }
     await import('./sentry.server.config');
   }
 
