@@ -3,9 +3,13 @@ import { createProviderTool } from "../create-provider-tool";
 import type { ProviderToolContext } from "../create-provider-tool";
 import { ProviderApiHelper } from "../provider-api-helper";
 
-// Supported objects (initially just deals). Expand incrementally.
+// Supported objects (expanded)
 const hubspotObjectEnum = z.enum([
   "deals",
+  "contacts",
+  "companies",
+  "invoices",
+  "tickets",
 ]);
 
 // Common types
@@ -95,8 +99,16 @@ export async function searchHubspotObjectsHandler(
   };
 }
 
-// Allowed association targets per from-object (start with deals)
-const dealsAssociationTargets = z.enum(["companies", "contacts"]);
+// Allowed association targets per from-object
+const associationTargetsByFrom: Record<z.infer<typeof hubspotObjectEnum>, string[]> = {
+  deals: ["companies", "contacts", "tickets"],
+  companies: ["contacts", "deals", "tickets", "invoices"],
+  contacts: ["companies", "deals", "tickets", "invoices"],
+  invoices: ["deals", "companies", "contacts"],
+  tickets: ["contacts", "companies", "deals"],
+};
+
+const makeTargetsEnum = (from: z.infer<typeof hubspotObjectEnum>) => z.enum(associationTargetsByFrom[from] as [string, ...string[]]);
 
 // CRUD tool schema
 export const hubspotObjectsSchema = {
@@ -108,13 +120,15 @@ export const hubspotObjectsSchema = {
   associations: z
     .array(
       z.object({
-        toObject: dealsAssociationTargets.describe("Target object to associate with (for deals: companies|contacts)"),
+        toObject: z.string().describe("Target object to associate with"),
         toIds: z.array(z.string()).min(1).describe("IDs of target records to associate"),
         type: z.string().optional().describe("Optional association type label; defaults to '<from>_to_<to>'"),
+        typeId: z.number().optional().describe("Optional association typeId override"),
+        mode: z.enum(["append", "delete", "replace"]).optional().default("append"),
       })
     )
     .optional()
-    .describe("Create associations after create/update"),
+    .describe("Manage associations after create/update"),
 };
 
 type CrudArgs = {
@@ -123,7 +137,7 @@ type CrudArgs = {
   id?: string;
   properties?: Record<string, any>;
   select?: string[];
-  associations?: { toObject: z.infer<typeof dealsAssociationTargets>; toIds: string[]; type?: string }[];
+  associations?: { toObject: string; toIds: string[]; type?: string; typeId?: number; mode?: "append"|"delete"|"replace" }[];
 };
 
 export async function hubspotObjectsHandler(
@@ -141,20 +155,64 @@ export async function hubspotObjectsHandler(
     return plural.replace(/s$/, "");
   };
 
-  const createAssociationsIfRequested = async (fromObject: string, fromId: string) => {
+  const ensureValidTargets = (from: string, to: string) => {
+    const allowed = associationTargetsByFrom[from as keyof typeof associationTargetsByFrom] || [];
+    if (!allowed.includes(to)) {
+      throw new Error(`Associations from ${from} to ${to} not supported. Allowed: ${allowed.join(", ")}`);
+    }
+  };
+
+  const manageAssociations = async (fromObject: string, fromId: string) => {
     const requested = args.associations?.filter(a => a.toIds?.length);
     if (!requested || requested.length === 0) return undefined;
     const results: any[] = [];
     for (const assoc of requested) {
       const toObject = assoc.toObject;
+      ensureValidTargets(fromObject, toObject);
       const type = assoc.type ?? `${singularize(fromObject)}_to_${singularize(toObject)}`;
-      const inputs = assoc.toIds.map(toId => ({ from: { id: fromId }, to: { id: toId }, type }));
-      const res = await api.post(
-        `/crm/v4/associations/${fromObject}/${toObject}/batch/create`,
-        `associate_${fromObject}_to_${toObject}`,
-        { inputs }
-      );
-      results.push({ toObject, count: inputs.length, raw: (res as any).data });
+      const inputs = assoc.toIds.map(toId => ({ from: { id: fromId }, to: { id: toId }, type, typeId: assoc.typeId }));
+      if (assoc.mode === "delete") {
+        const res = await api.post(
+          `/crm/v4/associations/${fromObject}/${toObject}/batch/archive`,
+          `disassociate_${fromObject}_to_${toObject}`,
+          { inputs }
+        );
+        results.push({ toObject, mode: "delete", count: inputs.length, raw: (res as any).data });
+      } else if (assoc.mode === "replace") {
+        // Read current
+        const current = await api.post(
+          `/crm/v4/associations/${fromObject}/${toObject}/batch/read`,
+          `read_assoc_${fromObject}_${toObject}`,
+          { inputs: [{ id: fromId }] }
+        );
+        const currentIds: string[] = (((current as any).data?.results?.[0]?.to || []).map((t: any) => String(t.id))) || [];
+        const desired = new Set(assoc.toIds.map(String));
+        const toCreate = currentIds.length ? assoc.toIds.filter(id => !currentIds.includes(String(id))) : assoc.toIds;
+        const toDelete = currentIds.filter(id => !desired.has(String(id)));
+        if (toCreate.length) {
+          const resCreate = await api.post(
+            `/crm/v4/associations/${fromObject}/${toObject}/batch/create`,
+            `associate_${fromObject}_to_${toObject}`,
+            { inputs: toCreate.map(id => ({ from: { id: fromId }, to: { id }, type, typeId: assoc.typeId })) }
+          );
+          results.push({ toObject, mode: "replace", created: toCreate.length, rawCreate: (resCreate as any).data });
+        }
+        if (toDelete.length) {
+          const resDelete = await api.post(
+            `/crm/v4/associations/${fromObject}/${toObject}/batch/archive`,
+            `disassociate_${fromObject}_to_${toObject}`,
+            { inputs: toDelete.map(id => ({ from: { id: fromId }, to: { id }, type, typeId: assoc.typeId })) }
+          );
+          results.push({ toObject, mode: "replace", deleted: toDelete.length, rawDelete: (resDelete as any).data });
+        }
+      } else {
+        const res = await api.post(
+          `/crm/v4/associations/${fromObject}/${toObject}/batch/create`,
+          `associate_${fromObject}_to_${toObject}`,
+          { inputs }
+        );
+        results.push({ toObject, mode: "append", count: inputs.length, raw: (res as any).data });
+      }
     }
     return results;
   };
@@ -177,7 +235,7 @@ export async function hubspotObjectsHandler(
     const created = (res as any).data;
     let assocResults: any | undefined;
     if (created?.id && args.associations && args.associations.length) {
-      assocResults = await createAssociationsIfRequested(args.object, created.id);
+      assocResults = await manageAssociations(args.object, created.id);
     }
     return { content: [{ type: "text", text: JSON.stringify({ authenticated: true, object: args.object, result: created, associations: assocResults }, null, 2) }] };
   }
@@ -193,7 +251,7 @@ export async function hubspotObjectsHandler(
     const updated = (res as any).data;
     let assocResults: any | undefined;
     if (args.associations && args.associations.length) {
-      assocResults = await createAssociationsIfRequested(args.object, args.id);
+      assocResults = await manageAssociations(args.object, args.id);
     }
     return { content: [{ type: "text", text: JSON.stringify({ authenticated: true, object: args.object, result: updated, associations: assocResults }, null, 2) }] };
   }
