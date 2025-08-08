@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ProviderApiHelper } from "../provider-api-helper";
-import { buildPricingTableSections } from "./utils";
+import { buildPricingTableSections, buildQuoteSections } from "./utils";
 import type { ProviderToolContext } from "../create-provider-tool";
 
 const LineItemSchema = z.object({
@@ -56,13 +56,14 @@ export async function createQuoteHandler(
   const templateId = process.env.PANDADOC_QUOTE_TEMPLATE_ID || "jYJNVcW7YQGeNw5gxw2vaL";
   
   // Create document from template
-  const createData = {
+  const createData: any = {
     template_uuid: templateId,
     name: `${args.client_name} - ${args.opportunity_name}`,
     recipients: [{
       email: args.recipient_email,
       role: "Client"
     }],
+    // Legacy pricing table support (if the template uses it)
     pricing_tables: [{
       name: "Quote",
       sections: buildPricingTableSections(args.sections)
@@ -74,14 +75,41 @@ export async function createQuoteHandler(
     throw new Error("Unexpected response from PandaDoc when creating document");
   }
   
-  const pandadocUrl = `https://app.pandadoc.com/a/#/documents/${response.data.id}`;
+  const documentId = response.data.id;
+  const pandadocUrl = `https://app.pandadoc.com/a/#/documents/${documentId}`;
+
+  // Wait for document to reach draft status before trying to update quotes
+  // Poll up to ~10s (5 attempts x 2s)
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const statusResp = await api.get(`/documents/${documentId}`, 'document_status');
+    const status = (statusResp as any)?.data?.status;
+    if (status && status !== 'document.uploaded') break;
+    await new Promise(r => setTimeout(r, 2000));
+  }
+
+  // Fetch document details to detect Advanced Quote block
+  const details = await api.get(`/documents/${documentId}/details`, 'get_document_details');
+  const quotes = (details as any)?.data?.pricing?.quotes;
+
+  // If an Advanced Quote exists in the template, update it via Quotes API instead of pricing_tables
+  if (Array.isArray(quotes) && quotes.length > 0) {
+    const quoteId = quotes[0]?.id;
+    if (quoteId) {
+      const sections = buildQuoteSections(args.sections);
+      await api.put(
+        `/documents/${documentId}/quotes/${quoteId}`,
+        'update_quote',
+        { sections }
+      );
+    }
+  }
   
   return {
     content: [{
       type: "text",
       text: JSON.stringify({
         authenticated: true,
-        document_id: response.data.id,
+        document_id: documentId,
         name: response.data.name,
         status: response.data.status,
         date_created: response.data.date_created,

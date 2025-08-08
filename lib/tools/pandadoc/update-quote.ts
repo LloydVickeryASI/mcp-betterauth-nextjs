@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ProviderApiHelper } from "../provider-api-helper";
-import { buildPricingTableSections, mapItemsToRows } from "./utils";
+import { buildPricingTableSections, buildQuoteSections } from "./utils";
 import type { ProviderToolContext } from "../create-provider-tool";
 
 const LineItemSchema = z.object({
@@ -51,38 +51,50 @@ export async function updateQuoteHandler(
   const api = new ProviderApiHelper(context);
   
   // Get existing document details if we need to append
-  let existingSections: any[] = [];
+  let existingQuoteSections: any[] = [];
+  let quoteId: string | undefined;
   
-  if (args.merge_mode === "append") {
-    const docResponse = await api.get(
-      `/documents/${args.document_id}/details`,
-      'get_document_details'
-    );
-    const existingPricingTable = docResponse?.data?.pricing?.tables?.[0];
-    if (existingPricingTable && Array.isArray(existingPricingTable.sections)) {
-      existingSections = existingPricingTable.sections;
+  const docResponse = await api.get(
+    `/documents/${args.document_id}/details`,
+    'get_document_details'
+  );
+  const quotes = (docResponse as any)?.data?.pricing?.quotes;
+  if (Array.isArray(quotes) && quotes.length > 0) {
+    quoteId = quotes[0]?.id;
+    if (args.merge_mode === 'append') {
+      const quote = quotes[0];
+      if (quote && Array.isArray(quote.sections)) {
+        existingQuoteSections = quote.sections;
+      }
     }
   }
   
-  // Prepare sections based on merge mode
-  const mappedSections = buildPricingTableSections(args.sections);
-  const finalSections = args.merge_mode === "append"
-    ? [...existingSections, ...mappedSections]
-    : mappedSections;
-  
-  // Update document with new pricing tables
-  const updateData = {
-    pricing_tables: [{
-      name: "Quote",
-      sections: finalSections
-    }]
-  };
-  
-  await api.put(
-    `/documents/${args.document_id}`,
-    'update_document',
-    updateData
-  );
+  if (quoteId) {
+    // Advanced Quotes path
+    const mappedSections = buildQuoteSections(args.sections);
+    const finalSections = args.merge_mode === 'append'
+      ? [...existingQuoteSections, ...mappedSections]
+      : mappedSections;
+    await api.put(
+      `/documents/${args.document_id}/quotes/${quoteId}`,
+      'update_quote',
+      { sections: finalSections }
+    );
+  } else {
+    // Fallback to legacy pricing tables
+    const mappedSections = buildPricingTableSections(args.sections);
+    const finalSections = args.merge_mode === "append"
+      ? [...existingQuoteSections, ...mappedSections]
+      : mappedSections;
+    const updateData = {
+      pricing_tables: [{ name: 'Quote', sections: finalSections }]
+    };
+    await api.put(
+      `/documents/${args.document_id}`,
+      'update_document',
+      updateData
+    );
+  }
   
   const pandadocUrl = `https://app.pandadoc.com/a/#/documents/${args.document_id}`;
   

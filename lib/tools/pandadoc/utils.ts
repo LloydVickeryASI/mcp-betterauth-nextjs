@@ -43,4 +43,44 @@ export function buildPricingTableSections(sections: QuoteSection[]) {
   }));
 }
 
+// Advanced Quotes (CPQ) mappers
+// See: https://developers.pandadoc.com/docs/update-quotes
+type PandaDocQuoteItem = {
+  sku?: string;
+  name: string;
+  description?: string;
+  qty: string | number;
+  price: string | number;
+  cost?: string | number;
+  type?: 'product';
+  options?: { qty_editable?: boolean; selected?: boolean };
+};
+
+type PandaDocQuoteSection = {
+  name: string;
+  items: PandaDocQuoteItem[];
+  settings?: { selection_type?: 'custom' | 'single' | 'multiple'; optional?: boolean; selected?: boolean };
+};
+
+export function mapItemsToQuoteItems(items: QuoteItem[]): PandaDocQuoteItem[] {
+  return items.map(item => ({
+    sku: item.supplier_ref || undefined,
+    name: item.name,
+    description: item.description || "",
+    qty: item.quantity ?? 1,
+    price: item.sell_price,
+    cost: item.cost_price,
+    type: 'product',
+    options: { qty_editable: true, selected: true }
+  }));
+}
+
+export function buildQuoteSections(sections: QuoteSection[]): PandaDocQuoteSection[] {
+  return sections.map(section => ({
+    name: section.title,
+    items: mapItemsToQuoteItems(section.items),
+    settings: { selection_type: 'custom', optional: false, selected: true }
+  }));
+}
+
 
