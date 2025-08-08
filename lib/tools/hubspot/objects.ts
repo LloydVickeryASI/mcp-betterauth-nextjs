@@ -307,7 +307,7 @@ export function registerHubspotObjectsTools(server: any) {
   // Search tool (deals only for now)
   createProviderTool(server, {
     name: "search_hubspot_objects",
-    description: "Search HubSpot objects (initially deals); supports filterGroups, select, sorts, paging",
+    description: "Search HubSpot objects; supports filterGroups (OR), AND filters, select, sorts, paging",
     provider: "hubspot",
     schema: searchHubspotObjectsSchema,
     handler: searchHubspotObjectsHandler,
@@ -316,7 +316,7 @@ export function registerHubspotObjectsTools(server: any) {
   // CRUD tool (deals only for now)
   createProviderTool(server, {
     name: "hubspot_objects",
-    description: "Perform CRUD operations on HubSpot objects (initially deals)",
+    description: "Perform CRUD operations on HubSpot objects",
     provider: "hubspot",
     schema: hubspotObjectsSchema,
     handler: hubspotObjectsHandler,
