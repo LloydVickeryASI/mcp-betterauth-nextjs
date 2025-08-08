@@ -37,6 +37,9 @@ Replace the localhost URLs with your ngrok URL:
 ```env
 AUTH_ISSUER=https://xxxx-xx-xx-xx-xx.ngrok-free.app
 NEXT_PUBLIC_AUTH_URL=https://xxxx-xx-xx-xx-xx.ngrok-free.app
+# Optional: override default quote template ID used by create_pandadoc_quote
+# If omitted, falls back to jYJNVcW7YQGeNw5gxw2vaL
+PANDADOC_QUOTE_TEMPLATE_ID=your-template-id
 ```
 
 ### 3. Configure PandaDoc OAuth App

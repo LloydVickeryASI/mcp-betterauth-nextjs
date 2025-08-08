@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ProviderApiHelper } from "../provider-api-helper";
+import { buildPricingTableSections } from "./utils";
 import type { ProviderToolContext } from "../create-provider-tool";
 
 const LineItemSchema = z.object({
@@ -22,7 +23,7 @@ export const createQuoteSchema = {
   opportunity_name: z.string().describe("Opportunity/project name"),
   sections: z.array(SectionSchema).describe("Quote sections with line items"),
   template_id: z.string().optional().describe("PandaDoc template ID (optional)"),
-  recipient_email: z.string().email().optional().describe("Recipient email address (optional)")
+  recipient_email: z.string().email().describe("Recipient email address")
 };
 
 type CreateQuoteArgs = {
@@ -41,7 +42,7 @@ type CreateQuoteArgs = {
     }>;
   }>;
   template_id?: string;
-  recipient_email?: string;
+  recipient_email: string;
 };
 
 export async function createQuoteHandler(
@@ -51,61 +52,27 @@ export async function createQuoteHandler(
   // Create API helper with context
   const api = new ProviderApiHelper(context);
   
-  // First, get template ID if not provided
-  let templateId = args.template_id;
-  
-  if (!templateId) {
-    // List templates to find a default one
-    const templatesResponse = await api.get('/templates', 'list_templates');
-    const templates = templatesResponse.data.results || [];
-    
-    if (templates.length === 0) {
-      throw new Error("No templates available. Please create a template in PandaDoc first.");
-    }
-    
-    // Look for a template with "quote" in the name, or use the first one
-    const quoteTemplate = templates.find((t: any) => 
-      t.name.toLowerCase().includes('quote')
-    );
-    
-    templateId = quoteTemplate?.id || templates[0].id;
-  }
+  // Use configured template ID with fallback to default
+  const templateId = process.env.PANDADOC_QUOTE_TEMPLATE_ID || "jYJNVcW7YQGeNw5gxw2vaL";
   
   // Create document from template
   const createData = {
     template_uuid: templateId,
     name: `${args.client_name} - ${args.opportunity_name}`,
     recipients: [{
-      email: args.recipient_email || "placeholder@example.com",
+      email: args.recipient_email,
       role: "Client"
     }],
     pricing_tables: [{
       name: "Quote",
-      sections: args.sections.map(section => ({
-        title: section.title,
-        default: true,
-        rows: section.items.map(item => ({
-          options: {
-            qty_editable: true,
-            optional: false
-          },
-          data: {
-            name: item.name,
-            description: item.description || "",
-            price: item.sell_price,
-            cost: item.cost_price,
-            qty: item.quantity || 1,
-            unit: item.unit || "ea",
-            custom_fields: {
-              supplier_ref: item.supplier_ref || ""
-            }
-          }
-        }))
-      }))
+      sections: buildPricingTableSections(args.sections)
     }]
   };
   
   const response = await api.post('/documents', 'create_document', createData);
+  if (!response?.data?.id || !response?.data?.name) {
+    throw new Error("Unexpected response from PandaDoc when creating document");
+  }
   
   const pandadocUrl = `https://app.pandadoc.com/a/#/documents/${response.data.id}`;
   

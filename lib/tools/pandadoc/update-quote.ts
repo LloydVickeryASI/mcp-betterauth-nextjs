@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ProviderApiHelper } from "../provider-api-helper";
+import { buildPricingTableSections, mapItemsToRows } from "./utils";
 import type { ProviderToolContext } from "../create-provider-tool";
 
 const LineItemSchema = z.object({
@@ -57,57 +58,17 @@ export async function updateQuoteHandler(
       `/documents/${args.document_id}/details`,
       'get_document_details'
     );
-    
-    const existingPricingTable = docResponse.data.pricing?.tables?.[0];
-    if (existingPricingTable?.sections) {
+    const existingPricingTable = docResponse?.data?.pricing?.tables?.[0];
+    if (existingPricingTable && Array.isArray(existingPricingTable.sections)) {
       existingSections = existingPricingTable.sections;
     }
   }
   
   // Prepare sections based on merge mode
-  const finalSections = args.merge_mode === "append" 
-    ? [...existingSections, ...args.sections.map(section => ({
-        title: section.title,
-        default: true,
-        rows: section.items.map(item => ({
-          options: {
-            qty_editable: true,
-            optional: false
-          },
-          data: {
-            name: item.name,
-            description: item.description || "",
-            price: item.sell_price,
-            cost: item.cost_price,
-            qty: item.quantity || 1,
-            unit: item.unit || "ea",
-            custom_fields: {
-              supplier_ref: item.supplier_ref || ""
-            }
-          }
-        }))
-      }))]
-    : args.sections.map(section => ({
-        title: section.title,
-        default: true,
-        rows: section.items.map(item => ({
-          options: {
-            qty_editable: true,
-            optional: false
-          },
-          data: {
-            name: item.name,
-            description: item.description || "",
-            price: item.sell_price,
-            cost: item.cost_price,
-            qty: item.quantity || 1,
-            unit: item.unit || "ea",
-            custom_fields: {
-              supplier_ref: item.supplier_ref || ""
-            }
-          }
-        }))
-      }));
+  const mappedSections = buildPricingTableSections(args.sections);
+  const finalSections = args.merge_mode === "append"
+    ? [...existingSections, ...mappedSections]
+    : mappedSections;
   
   // Update document with new pricing tables
   const updateData = {
