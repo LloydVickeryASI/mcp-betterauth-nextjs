@@ -90,20 +90,6 @@ const mcpHandlerFunction = async (req: Request, session: any) => {
                     userProfile
                 };
             
-            // Register simple echo tool
-            registerTool(
-                server,
-                "echo",
-                "Echo back a string",
-                {
-                    message: z.string().describe("The message to echo back")
-                },
-                async ({ message }) => {
-                    return {
-                        content: [{ type: "text", text: `Echo: ${message}` }],
-                    };
-                }
-            );
             
             // Register test trace tool to diagnose Sentry
             registerTool(
@@ -230,14 +216,8 @@ const mcpHandlerFunction = async (req: Request, session: any) => {
         {
             capabilities: {
                 tools: {
-                    echo: {
-                        description: "Echo a message",
-                    },
                     test_sentry_trace: {
                         description: "Test Sentry trace capture and logging",
-                    },
-                    search_hubspot_contacts: {
-                        description: "Search HubSpot contacts by email (exact match for full emails, partial match for fragments)",
                     },
                     list_pandadoc_documents: {
                         description: "List PandaDoc documents with optional status filter, pagination (count/page), and ordering",

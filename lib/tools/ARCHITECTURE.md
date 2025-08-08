@@ -43,7 +43,7 @@ export const searchContactsHandler = async ({ query }, context) => {
 
 // After: ~30 lines of pure business logic
 createProviderTool(server, {
-  name: "search_hubspot_contacts",
+  name: "search_hubspot_objects",
   provider: "hubspot",
   schema: { query: z.string() },
   handler: async ({ query }, context) => {

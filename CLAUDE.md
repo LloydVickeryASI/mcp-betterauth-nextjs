@@ -69,7 +69,7 @@ This is a Next.js 15 application that implements an MCP (Model Context Protocol)
        - `echo` - Echoes back a string message
        - `get_auth_status` - Returns authentication status with full Microsoft profile information
        - **OAuth-based tools:**
-         - `search_hubspot_contacts` - Search HubSpot contacts (requires HubSpot connection)
+- `search_hubspot_objects` - Search HubSpot CRM objects
          - `list_pandadoc_documents` - List PandaDoc documents (requires PandaDoc connection)
          - `search_xero_contacts` - Search Xero accounting contacts (requires Xero connection)
      - Uses `withMcpAuth` wrapper for token verification

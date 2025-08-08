@@ -18,7 +18,7 @@ A Model Context Protocol (MCP) server built with Next.js and Better Auth for OAu
 - **Tools**: 
   - `echo` - Echo back a string
   - `get_auth_status` - Get authentication status with Microsoft profile information (name, email, image, etc.)
-  - `search_hubspot_contacts` - Search HubSpot contacts by email (requires HubSpot authentication)
+  - `search_hubspot_objects` - Search HubSpot CRM objects (filters/filterGroups/sorts/paging)
   - `list_pandadoc_documents` - List PandaDoc documents with optional status filter and pagination (requires PandaDoc authentication)
 - **Requires**: OAuth bearer token from Better Auth
 
