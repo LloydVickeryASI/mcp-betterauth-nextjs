@@ -199,9 +199,23 @@ export function createProviderTool<TArgs = any>(
           
           providerLogger.info(providerLogger.fmt`Executing provider tool: ${config.provider}/${config.name}`);
           
-          // Call the actual tool handler
-          const result = await config.handler(args, providerContext);
-          return result;
+          // Start a scoped span for the provider tool to nest external API spans
+          return await Sentry.startSpan(
+            {
+              op: 'mcp.provider.tool',
+              name: `${config.provider}/${config.name}`,
+              attributes: {
+                'mcp.tool.name': config.name,
+                'mcp.provider': config.provider,
+                'mcp.auth_method': actualAuthMethod || 'unknown',
+                'mcp.session.user_id': context.session?.userId,
+              },
+            },
+            async () => {
+              const result = await config.handler(args, providerContext);
+              return result;
+            }
+          );
         } catch (error: any) {
           // Handle token expiration errors consistently (OAuth only)
           if (actualAuthMethod === 'oauth' && 

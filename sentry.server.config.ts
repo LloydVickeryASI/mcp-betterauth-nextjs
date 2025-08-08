@@ -43,6 +43,24 @@ Sentry.init({
       return null; // Don't capture undefined HTTP breadcrumbs
     }
     
+    // Suppress noisy Next.js warning about async params spreading
+    if (
+      breadcrumb.category === 'console' &&
+      typeof breadcrumb.message === 'string' &&
+      breadcrumb.message.includes('used `...params`')
+    ) {
+      return null;
+    }
+    
+    // Suppress internal not-found route noise
+    if (
+      breadcrumb.category === 'console' &&
+      typeof breadcrumb.message === 'string' &&
+      breadcrumb.message.includes('Route "/_not-found"')
+    ) {
+      return null;
+    }
+    
     if (process.env.NODE_ENV === 'development' && breadcrumb.message) {
       console.log('[Sentry] Breadcrumb:', breadcrumb.category, breadcrumb.message);
     }

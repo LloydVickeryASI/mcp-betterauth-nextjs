@@ -51,6 +51,18 @@ export class SimplifiedApiClient {
     operation: string,
     options: ApiRequestOptions = {}
   ): Promise<ApiResponse<T>> {
+    // Helper to truncate large payloads before attaching to spans
+    const truncate = (value: unknown, max = 4000): unknown => {
+      try {
+        const str = typeof value === 'string' ? value : JSON.stringify(value);
+        if (str.length > max) {
+          return str.slice(0, max) + `... [truncated ${str.length - max} chars]`;
+        }
+        return JSON.parse(str);
+      } catch {
+        return value;
+      }
+    };
     // Try to get from provider config first
     const providerConfig = getProviderConfig(provider);
     let baseUrl: string;
@@ -205,45 +217,75 @@ export class SimplifiedApiClient {
           const logComplete = logResponse(requestLog);
           
           try {
-            // Make the request
-            const response = await fetch(urlObj.toString(), {
-              method: options.method || 'GET',
-              headers,
-              body: options.body ? JSON.stringify(options.body) : undefined,
-              signal: AbortSignal.timeout(30000), // 30 second timeout
-            });
-            
-            // Parse response
-            const responseData = await this.parseResponse<T>(response);
-            
-            // Log response
-            logComplete({
-              ...requestLog,
-              duration: 0, // Will be calculated by logger
-              status: response.status,
-              responseHeaders: Object.fromEntries(response.headers.entries()),
-              responseBody: responseData,
-            });
-            
-            // Handle errors
-            if (!response.ok) {
-              
-              const errorMapper = providerErrorMappers[provider] || mapProviderError;
-              throw errorMapper(operation, {
-                response: {
-                  status: response.status,
-                  data: responseData,
-                  headers: Object.fromEntries(response.headers.entries()),
+            // Create a span for this specific outbound API attempt
+            return await Sentry.startSpan(
+              {
+                op: 'external.api',
+                name: `${provider}:${operation}`,
+                attributes: {
+                  'external.provider': provider,
+                  'external.operation': operation,
+                  'http.url': urlObj.toString(),
+                  'http.method': options.method || 'GET',
+                  'user.id': userId,
                 },
-              });
-            }
-            
-            const result: ApiResponse<T> = {
-              data: responseData,
-              status: response.status,
-              headers: Object.fromEntries(response.headers.entries()),
-            };
-            return result;
+              },
+              async (span) => {
+                // Attach request data (sanitized/truncated) as span attributes
+                try {
+                  span?.setAttribute('request.url', urlObj.toString());
+                  span?.setAttribute('request.method', options.method || 'GET');
+                  span?.setAttribute('request.headers', JSON.stringify(this.sanitizeHeaders(headers)));
+                  span?.setAttribute('request.body', JSON.stringify(truncate(options.body)));
+                } catch {}
+                
+                // Make the request
+                const response = await fetch(urlObj.toString(), {
+                  method: options.method || 'GET',
+                  headers,
+                  body: options.body ? JSON.stringify(options.body) : undefined,
+                  signal: AbortSignal.timeout(30000), // 30 second timeout
+                });
+                
+                // Parse response
+                const responseData = await this.parseResponse<T>(response);
+                
+                // Log response
+                logComplete({
+                  ...requestLog,
+                  duration: 0, // Calculated by logger
+                  status: response.status,
+                  responseHeaders: Object.fromEntries(response.headers.entries()),
+                  responseBody: responseData,
+                });
+                
+                // Annotate span with response info
+                span?.setAttribute('http.status_code', response.status);
+                try {
+                  span?.setAttribute('response.headers', JSON.stringify(Object.fromEntries(response.headers.entries())));
+                  span?.setAttribute('response.body', JSON.stringify(truncate(responseData)));
+                } catch {}
+                if (!response.ok) {
+                  span?.setStatus('internal_error' as any);
+                  const errorMapper = providerErrorMappers[provider] || mapProviderError;
+                  throw errorMapper(operation, {
+                    response: {
+                      status: response.status,
+                      data: responseData,
+                      headers: Object.fromEntries(response.headers.entries()),
+                    },
+                  });
+                }
+                span?.setStatus('ok' as any);
+                
+                const result: ApiResponse<T> = {
+                  data: responseData,
+                  status: response.status,
+                  headers: Object.fromEntries(response.headers.entries()),
+                };
+                return result;
+              }
+            );
           } catch (error) {
             // Log error
             logComplete({

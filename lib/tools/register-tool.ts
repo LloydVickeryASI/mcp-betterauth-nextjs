@@ -100,7 +100,28 @@ export function registerTool(
 
               try {
                 const startTime = Date.now();
-                const result = await handler(args, context);
+                // Wrap tool handler in a child span for result marshalling
+                const result = await Sentry.startSpan(
+                  {
+                    op: 'mcp.tool.result',
+                    name: `MCP Tool Result: ${name}`,
+                    attributes: {
+                      'mcp.tool.name': name,
+                    },
+                  },
+                  async (span) => {
+                    const res = await handler(args, context);
+                    // Attach the returned payload (truncated)
+                    try {
+                      const stringified = JSON.stringify(res);
+                      const trimmed = stringified.length > 4000 ? stringified.slice(0, 4000) + `... [truncated ${stringified.length - 4000} chars]` : stringified;
+                      span?.setAttribute('mcp.tool.result', trimmed);
+                    } catch {
+                      // ignore
+                    }
+                    return res;
+                  }
+                );
                 
                 // Log successful completion
                 const duration = Date.now() - startTime;
@@ -118,6 +139,17 @@ export function registerTool(
                   error: err instanceof Error ? err.message : String(err),
                   errorMessage,
                   toolArgs: args,
+                });
+                
+                // Capture tool failure details on the current span
+                Sentry.addBreadcrumb({
+                  category: 'mcp.tool',
+                  level: 'error',
+                  message: `Tool ${name} failed`,
+                  data: {
+                    tool: name,
+                    error: err instanceof Error ? err.message : String(err),
+                  },
                 });
                 
                 return {
