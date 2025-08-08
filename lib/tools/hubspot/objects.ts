@@ -10,34 +10,52 @@ const hubspotObjectEnum = z.enum([
   "companies",
   "invoices",
   "tickets",
-]);
+]).describe("HubSpot CRM object. Supported: deals, contacts, companies, invoices, tickets");
 
 // Common types
 const sortSchema = z.object({
-  propertyName: z.string(),
-  direction: z.enum(["ASCENDING", "DESCENDING"]).default("ASCENDING"),
+  propertyName: z.string().describe("Property to sort by (e.g., createdate)"),
+  direction: z.enum(["ASCENDING", "DESCENDING"]).default("ASCENDING").describe("Sort direction"),
 });
 
 const filterSchema = z.object({
-  propertyName: z.string(),
-  operator: z.string(), // pass-through; HubSpot validates operators
-  value: z.union([z.string(), z.number(), z.boolean()]),
-});
+  propertyName: z.string().describe("Property name (e.g., email, dealname, domain)"),
+  operator: z.string().describe("HubSpot operator (e.g., EQ, CONTAINS_TOKEN, IN, GTE, LTE, HAS_PROPERTY)"),
+  value: z.union([z.string(), z.number(), z.boolean()]).describe("Comparison value"),
+}).describe("Single filter (AND within the same group)");
 
 const filterGroupSchema = z.object({
-  filters: z.array(filterSchema).min(1),
-});
+  filters: z.array(filterSchema).min(1).describe("Filters combined with AND"),
+}).describe("Group of filters; multiple groups are OR'ed together");
 
 // Search tool schema
 export const searchHubspotObjectsSchema = {
-  object: hubspotObjectEnum.describe("HubSpot object to search (initially only 'deals')"),
-  filters: z.array(filterSchema).optional().describe("AND filters for basic searches"),
-  filterGroups: z.array(filterGroupSchema).optional().describe("Optional OR logic via multiple groups"),
-  select: z.array(z.string()).optional().describe("Properties to return"),
-  sorts: z.array(sortSchema).optional(),
-  limit: z.number().min(1).max(100).default(25).optional(),
-  after: z.string().optional().describe("Paging cursor"),
-  includeArchived: z.boolean().optional().default(false),
+  object: hubspotObjectEnum.describe("Which object to search"),
+  filters: z
+    .array(filterSchema)
+    .optional()
+    .describe("Basic AND filters. If both filters and filterGroups are provided, filterGroups take precedence."),
+  filterGroups: z
+    .array(filterGroupSchema)
+    .optional()
+    .describe("Advanced OR logic: multiple groups are OR'ed. Overrides 'filters' if provided."),
+  select: z
+    .array(z.string())
+    .optional()
+    .describe("Properties to return. If omitted, sensible defaults are used per object."),
+  sorts: z
+    .array(z.union([sortSchema, z.string()]))
+    .optional()
+    .describe("Sort order(s). Accepts objects or shorthand strings like '-createdate' or 'createdate'."),
+  limit: z
+    .number()
+    .min(1)
+    .max(100)
+    .default(25)
+    .optional()
+    .describe("Max results per page (1-100)"),
+  after: z.string().optional().describe("Paging cursor (use value from previous response.paging.next.after)"),
+  includeArchived: z.boolean().optional().default(false).describe("Include archived records"),
 };
 
 type SearchArgs = {
@@ -60,11 +78,29 @@ export async function searchHubspotObjectsHandler(
     limit: args.limit ?? 25,
   };
 
+  const defaultSelectByObject: Record<string, string[]> = {
+    deals: ["dealname", "amount", "dealstage", "createdate"],
+    contacts: ["firstname", "lastname", "email", "phone"],
+    companies: ["name", "domain", "city"],
+    invoices: ["hs_invoice_number", "hs_invoice_status", "amount_to_collect", "hs_createdate"],
+    tickets: ["subject", "hs_pipeline", "hs_ticket_priority", "createdate"],
+  };
+
   if (args.select?.length) {
     searchBody.properties = args.select;
+  } else {
+    searchBody.properties = defaultSelectByObject[args.object] ?? undefined;
   }
   if (args.sorts?.length) {
-    searchBody.sorts = args.sorts.map(s => ({ propertyName: s.propertyName, direction: s.direction }));
+    searchBody.sorts = args.sorts.map((s: any) => {
+      if (typeof s === "string") {
+        const isDesc = s.startsWith("-");
+        const prop = isDesc ? s.slice(1) : s;
+        return { propertyName: prop, direction: isDesc ? "DESCENDING" : "ASCENDING" };
+      }
+      const dir = s.direction === "ASC" ? "ASCENDING" : s.direction === "DESC" ? "DESCENDING" : s.direction;
+      return { propertyName: s.propertyName, direction: dir };
+    });
   }
   if (args.filters?.length) {
     searchBody.filterGroups = [{ filters: args.filters }];
